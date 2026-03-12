@@ -355,7 +355,6 @@ async def before_check_rss():
     await bot.wait_until_ready()
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def setup_news(ctx):
     """إنشاء روم الأخبار تلقائياً"""
     await ctx.message.delete()
@@ -398,7 +397,6 @@ async def setup_news(ctx):
     print(f"✅ News channel created: #{news_channel.name}")
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def news_stats(ctx):
     """إحصائيات الأخبار"""
     try:
@@ -479,7 +477,6 @@ async def news_stats(ctx):
         await ctx.send(f"❌ Error: {e}")
 
 @bot.command()
-@commands.has_permissions(administrator=True)
 async def coin_sentiment(ctx, symbol: str):
     """عرض sentiment لعملة معينة"""
     try:
