@@ -79,7 +79,7 @@ def create_table():
                 sentiment VARCHAR(20),
                 score FLOAT,
                 headline TEXT,
-                source VARCHAR(50),
+                source VARCHAR(200),
                 channel_id BIGINT,
                 timestamp TIMESTAMP DEFAULT NOW()
             )
@@ -161,7 +161,7 @@ def save_news(symbol, sentiment, score, headline, source, channel_id):
             INSERT INTO news_sentiment 
             (symbol, sentiment, score, headline, source, channel_id)
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (symbol, sentiment, score, headline[:500], source, channel_id))
+        """, (symbol, sentiment, score, headline[:500], source[:200], channel_id))
         
         conn.commit()
         cursor.close()
