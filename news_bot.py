@@ -382,14 +382,56 @@ async def news_stats(ctx):
         cursor.close()
         conn.close()
         
+        # Calculate percentages
+        total = stats['total']
+        pos_pct = (stats['positive'] / total * 100) if total > 0 else 0
+        neg_pct = (stats['negative'] / total * 100) if total > 0 else 0
+        neu_pct = (stats['neutral'] / total * 100) if total > 0 else 0
+        
+        # Determine overall sentiment
+        if pos_pct > 60:
+            overall = "🟢 Bullish Market"
+            color = 0x00ff00
+        elif neg_pct > 60:
+            overall = "🔴 Bearish Market"
+            color = 0xff0000
+        else:
+            overall = "🟡 Neutral Market"
+            color = 0xffaa00
+        
         embed = discord.Embed(
-            title="📰 News Statistics (24h)",
-            color=0x00ff00
+            title="📊 News Sentiment Analysis",
+            description=f"**Last 24 Hours** | {overall}",
+            color=color,
+            timestamp=datetime.now()
         )
-        embed.add_field(name="Total", value=stats['total'], inline=True)
-        embed.add_field(name="✅ Positive", value=stats['positive'], inline=True)
-        embed.add_field(name="❌ Negative", value=stats['negative'], inline=True)
-        embed.add_field(name="⚪ Neutral", value=stats['neutral'], inline=True)
+        
+        # Stats with progress bars
+        embed.add_field(
+            name="📈 Total News Analyzed",
+            value=f"```{total} articles```",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="✅ Positive Sentiment",
+            value=f"```{stats['positive']} articles ({pos_pct:.1f}%)```",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="❌ Negative Sentiment",
+            value=f"```{stats['negative']} articles ({neg_pct:.1f}%)```",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="⚪ Neutral Sentiment",
+            value=f"```{stats['neutral']} articles ({neu_pct:.1f}%)```",
+            inline=True
+        )
+        
+        embed.set_footer(text="News Analysis Bot • MSA", icon_url=bot.user.avatar.url if bot.user.avatar else None)
         
         await ctx.send(embed=embed)
         
