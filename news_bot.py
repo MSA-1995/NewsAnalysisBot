@@ -194,6 +194,32 @@ async def on_ready():
     # Create table
     create_table()
     
+    # Auto-create news channel if not exists
+    for guild in bot.guilds:
+        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+        if not news_channel:
+            try:
+                news_channel = await guild.create_text_channel(
+                    name="news-analysis-bot",
+                    topic="📰 Crypto News Analysis - Automated RSS Feeds",
+                    reason="Auto-setup by News Analysis Bot"
+                )
+                
+                # Welcome message
+                welcome_embed = discord.Embed(
+                    title="📰 News Analysis Bot",
+                    description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\n✅ **المصادر:**\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\n🔄 **التحديث:** كل 30 دقيقة\n🧠 **التحليل:** Sentiment Analysis",
+                    color=0x00ff00
+                )
+                welcome_embed.set_footer(text="News Analysis Bot - MSA")
+                await news_channel.send(embed=welcome_embed)
+                
+                print(f"✅ Auto-created news channel in {guild.name}")
+            except Exception as e:
+                print(f"⚠️ Could not create channel in {guild.name}: {e}")
+        else:
+            print(f"✅ News channel exists in {guild.name}")
+    
     # Start RSS feed checker
     if not check_rss_feeds.is_running():
         check_rss_feeds.start()
