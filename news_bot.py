@@ -224,6 +224,11 @@ async def on_ready():
     if not check_rss_feeds.is_running():
         check_rss_feeds.start()
         print("🔄 RSS Feed Checker: STARTED")
+    
+    # Start auto-cleanup
+    if not cleanup_old_news.is_running():
+        cleanup_old_news.start()
+        print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
 
 @bot.event
 async def on_message(message):
@@ -349,6 +354,35 @@ async def check_rss_feeds():
         processed_news.clear()
     
     print("✅ RSS check completed")
+
+# Auto-cleanup old news
+@tasks.loop(hours=1)
+async def cleanup_old_news():
+    """حذف الأخبار الأقدم من 24 ساعة كل ساعة"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return
+        
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM news_sentiment 
+            WHERE timestamp < NOW() - INTERVAL '24 hours'
+        """)
+        
+        deleted_count = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        if deleted_count > 0:
+            print(f"🗑️ Cleaned up {deleted_count} old news (>24h)")
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
+@cleanup_old_news.before_loop
+async def before_cleanup():
+    await bot.wait_until_ready()
 
 @check_rss_feeds.before_loop
 async def before_check_rss():
