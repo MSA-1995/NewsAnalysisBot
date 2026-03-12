@@ -72,6 +72,8 @@ def create_table():
             return
         
         cursor = conn.cursor()
+        
+        # إنشاء الجدول إذا ما كان موجود
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS news_sentiment (
                 id SERIAL PRIMARY KEY,
@@ -84,6 +86,18 @@ def create_table():
                 timestamp TIMESTAMP DEFAULT NOW()
             )
         """)
+        
+        # تعديل عمود source إذا كان صغير
+        try:
+            cursor.execute("""
+                ALTER TABLE news_sentiment 
+                ALTER COLUMN source TYPE VARCHAR(200)
+            """)
+            print("✅ source column updated to VARCHAR(200)")
+        except Exception as e:
+            # العمود موجود بالحجم الصحيح
+            pass
+        
         conn.commit()
         cursor.close()
         conn.close()
