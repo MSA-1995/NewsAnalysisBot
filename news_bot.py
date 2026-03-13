@@ -41,8 +41,128 @@ RSS_FEEDS = [
     'https://cryptonews.com/news/feed/',
 ]
 
+# Free APIs (مجانية 100%)
+CRYPTOPANIC_KEY = os.getenv("CRYPTOPANIC_KEY", "")  # مجاني 300 requests/يوم
+REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
+REDDIT_SECRET = os.getenv("REDDIT_SECRET", "")
+reddit_token = None
+
 # Track processed news
 processed_news = set()
+
+# Reddit Token
+def get_reddit_token():
+    """الحصول على Reddit Access Token"""
+    global reddit_token
+    if not REDDIT_CLIENT_ID or not REDDIT_SECRET:
+        return None
+    try:
+        import requests
+        auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_SECRET)
+        data = {'grant_type': 'client_credentials'}
+        headers = {'User-Agent': 'NewsBot/1.0'}
+        response = requests.post('https://www.reddit.com/api/v1/access_token',
+                               auth=auth, data=data, headers=headers, timeout=10)
+        if response.status_code == 200:
+            reddit_token = response.json()['access_token']
+            return reddit_token
+    except:
+        pass
+    return None
+
+# CryptoPanic News
+def get_cryptopanic_news(symbol):
+    """جلب أخبار من CryptoPanic (Twitter + Reddit + News)"""
+    if not CRYPTOPANIC_KEY:
+        return []
+    try:
+        import requests
+        coin = symbol.split('/')[0]
+        url = f"https://cryptopanic.com/api/v1/posts/?auth_token={CRYPTOPANIC_KEY}&currencies={coin}&filter=hot"
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        news = []
+        for post in data.get('results', [])[:3]:
+            votes = post.get('votes', {})
+            positive = votes.get('positive', 0)
+            negative = votes.get('negative', 0)
+            sentiment = 'POSITIVE' if positive > negative * 2 else 'NEGATIVE' if negative > positive * 2 else 'NEUTRAL'
+            news.append({
+                'title': post.get('title', ''),
+                'url': post.get('url', ''),
+                'sentiment': sentiment,
+                'source': 'CryptoPanic'
+            })
+        return news
+    except:
+        return []
+
+# Reddit News
+def get_reddit_news(symbol):
+    """جلب أخبار من Reddit"""
+    global reddit_token
+    if not reddit_token:
+        reddit_token = get_reddit_token()
+    if not reddit_token:
+        return []
+    try:
+        import requests
+        coin = symbol.split('/')[0].lower()
+        headers = {
+            'Authorization': f'bearer {reddit_token}',
+            'User-Agent': 'NewsBot/1.0'
+        }
+        url = f"https://oauth.reddit.com/r/cryptocurrency/search?q={coin}&sort=hot&limit=3&t=day"
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        news = []
+        for post in data.get('data', {}).get('children', []):
+            p = post.get('data', {})
+            score = p.get('score', 0)
+            upvote_ratio = p.get('upvote_ratio', 0.5)
+            sentiment = 'POSITIVE' if upvote_ratio > 0.7 and score > 100 else 'NEGATIVE' if upvote_ratio < 0.4 else 'NEUTRAL'
+            news.append({
+                'title': p.get('title', ''),
+                'url': f"https://reddit.com{p.get('permalink', '')}",
+                'sentiment': sentiment,
+                'source': 'Reddit'
+            })
+        return news
+    except:
+        return []
+
+# CoinGecko News
+def get_coingecko_news(symbol):
+    """جلب معلومات من CoinGecko"""
+    try:
+        import requests
+        coin = symbol.split('/')[0].lower()
+        coin_map = {
+            'btc': 'bitcoin', 'eth': 'ethereum', 'bnb': 'binancecoin',
+            'sol': 'solana', 'ada': 'cardano', 'matic': 'matic-network',
+            'avax': 'avalanche-2', 'link': 'chainlink'
+        }
+        coin_id = coin_map.get(coin, coin)
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        market = data.get('market_data', {})
+        price_change = market.get('price_change_percentage_24h', 0)
+        sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
+        return [{
+            'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
+            'url': data.get('links', {}).get('homepage', [''])[0],
+            'sentiment': sentiment,
+            'source': 'CoinGecko'
+        }]
+    except:
+        return []
 
 # Database Connection
 def get_db_connection():
@@ -281,9 +401,10 @@ async def on_message(message):
 # RSS Feed Checker
 @tasks.loop(minutes=30)
 async def check_rss_feeds():
-    """فحص RSS Feeds كل 30 دقيقة"""
-    print("🔍 Checking RSS feeds...")
+    """فحص RSS Feeds + Free APIs كل 30 دقيقة"""
+    print("🔍 Checking RSS feeds + Free APIs...")
     
+    # 1. RSS Feeds (الموجودة)
     for feed_url in RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_url)
@@ -349,11 +470,55 @@ async def check_rss_feeds():
         except Exception as e:
             print(f"❌ RSS Feed error ({feed_url}): {e}")
     
+    # 2. Free APIs (CryptoPanic + Reddit + CoinGecko)
+    print("🔍 Checking Free APIs...")
+    
+    # العملات المدعومة
+    supported_coins = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT', 'MATIC/USDT', 'AVAX/USDT', 'LINK/USDT']
+    
+    for symbol in supported_coins:
+        try:
+            # CryptoPanic
+            cp_news = get_cryptopanic_news(symbol)
+            for news_item in cp_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 CryptoPanic: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(2)
+            
+            # Reddit
+            reddit_news = get_reddit_news(symbol)
+            for news_item in reddit_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 Reddit: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(2)
+            
+            # CoinGecko
+            cg_news = get_coingecko_news(symbol)
+            for news_item in cg_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 CoinGecko: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(3)
+            
+        except Exception as e:
+            print(f"⚠️ Free API error for {symbol}: {e}")
+    
     # تنظيف processed_news (الاحتفاظ بآخر 1000)
     if len(processed_news) > 1000:
         processed_news.clear()
     
-    print("✅ RSS check completed")
+    print("✅ RSS + Free APIs check completed")
 
 # Auto-cleanup old news
 @tasks.loop(hours=1)
@@ -383,6 +548,29 @@ async def cleanup_old_news():
 @cleanup_old_news.before_loop
 async def before_cleanup():
     await bot.wait_until_ready()
+
+# Helper function to send news
+async def send_news_to_channels(symbol, title, sentiment, score, source, url):
+    """إرسال الخبر لجميع السيرفرات"""
+    for guild in bot.guilds:
+        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+        if news_channel:
+            sentiment_emoji = "✅" if sentiment == 'POSITIVE' else "❌" if sentiment == 'NEGATIVE' else "⚪"
+            embed = discord.Embed(
+                title=f"{sentiment_emoji} {symbol} News",
+                description=title[:500],
+                color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                timestamp=datetime.now(),
+                url=url if url else None
+            )
+            embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+            embed.add_field(name="Source", value=source, inline=True)
+            embed.set_footer(text="News Analysis Bot")
+            try:
+                await news_channel.send(embed=embed)
+                await asyncio.sleep(1)
+            except:
+                pass
 
 @check_rss_feeds.before_loop
 async def before_check_rss():
