@@ -3,6 +3,23 @@
 يجيب أخبار من RSS Feeds، يحللها، ويحفظها في Database
 """
 
+# ========== LOAD ENV FILE ==========
+import os
+for _env_file in [
+    '/home/container/NewsAnalysisBot/.env',
+    '/home/container/.env',
+]:
+    try:
+        with open(_env_file) as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith('#') and '=' in _line:
+                    _k, _v = _line.split('=', 1)
+                    os.environ.setdefault(_k.strip(), _v.strip())
+        break
+    except:
+        pass
+
 import discord
 from discord.ext import commands, tasks
 import os
