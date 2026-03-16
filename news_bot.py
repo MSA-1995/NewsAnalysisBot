@@ -189,7 +189,7 @@ def get_coingecko_news(symbol):
 
 # Database Connection
 def get_db_connection():
-    """الاتصال بقاعدة البيانات"""
+    """الاتصال بقاعدة البيانات مع SSL"""
     try:
         from urllib.parse import urlparse, unquote
         parsed = urlparse(DATABASE_URL)
@@ -199,7 +199,9 @@ def get_db_connection():
             port=parsed.port,
             database=parsed.path[1:],
             user=parsed.username,
-            password=unquote(parsed.password)
+            password=unquote(parsed.password),
+            sslmode='require',
+            connect_timeout=10
         )
         return conn
     except Exception as e:
@@ -208,45 +210,49 @@ def get_db_connection():
 
 # Create news_sentiment table
 def create_table():
-    """إنشاء جدول الأخبار"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return
-        
-        cursor = conn.cursor()
-        
-        # إنشاء الجدول إذا ما كان موجود
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS news_sentiment (
-                id SERIAL PRIMARY KEY,
-                symbol VARCHAR(20),
-                sentiment VARCHAR(20),
-                score FLOAT,
-                headline TEXT,
-                source VARCHAR(200),
-                channel_id BIGINT,
-                timestamp TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        
-        # تعديل عمود source إذا كان صغير
+    """إنشاء جدول الأخبار مع retry"""
+    for attempt in range(3):
         try:
+            conn = get_db_connection()
+            if not conn:
+                if attempt < 2:
+                    import time
+                    time.sleep(2)
+                    continue
+                return
+            
+            cursor = conn.cursor()
+            
+            # إنشاء الجدول إذا ما كان موجود
             cursor.execute("""
-                ALTER TABLE news_sentiment 
-                ALTER COLUMN source TYPE VARCHAR(200)
+                CREATE TABLE IF NOT EXISTS news_sentiment (
+                    id SERIAL PRIMARY KEY,
+                    symbol VARCHAR(20),
+                    sentiment VARCHAR(20),
+                    score FLOAT,
+                    headline TEXT,
+                    source VARCHAR(200),
+                    channel_id BIGINT,
+                    timestamp TIMESTAMP DEFAULT NOW()
+                )
             """)
-            print("✅ source column updated to VARCHAR(200)")
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("✅ news_sentiment table ready")
+            return
         except Exception as e:
-            # العمود موجود بالحجم الصحيح
-            pass
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("✅ news_sentiment table ready")
-    except Exception as e:
-        print(f"❌ Table creation error: {e}")
+            print(f"❌ Table creation error (attempt {attempt+1}/3): {e}")
+            try:
+                if conn:
+                    conn.close()
+            except:
+                pass
+            
+            if attempt < 2:
+                import time
+                time.sleep(2)
 
 # قائمة العملات الثابتة (50 عملة - موحدة مع بوت التداول)
 SYMBOLS = [
