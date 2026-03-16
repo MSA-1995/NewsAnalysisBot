@@ -187,23 +187,60 @@ def get_coingecko_news(symbol):
     except:
         return []
 
-# Database Connection
+# Database Connection Pool
+_db_conn = None
+_db_params = None
+
+def init_db_params():
+    """تهيئة معاملات الاتصال"""
+    global _db_params
+    if _db_params:
+        return
+    
+    from urllib.parse import urlparse, unquote
+    parsed = urlparse(DATABASE_URL)
+    
+    _db_params = {
+        'host': parsed.hostname,
+        'port': parsed.port,
+        'database': parsed.path[1:],
+        'user': parsed.username,
+        'password': unquote(parsed.password),
+        'sslmode': 'require',
+        'connect_timeout': 10,
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5
+    }
+
 def get_db_connection():
-    """الاتصال بقاعدة البيانات مع SSL"""
+    """الاتصال بقاعدة البيانات مع إعادة استخدام"""
+    global _db_conn, _db_params
+    
     try:
-        from urllib.parse import urlparse, unquote
-        parsed = urlparse(DATABASE_URL)
+        init_db_params()
         
-        conn = psycopg2.connect(
-            host=parsed.hostname,
-            port=parsed.port,
-            database=parsed.path[1:],
-            user=parsed.username,
-            password=unquote(parsed.password),
-            sslmode='require',
-            connect_timeout=10
-        )
-        return conn
+        # فحص الاتصال الحالي
+        if _db_conn and not _db_conn.closed:
+            try:
+                # اختبار الاتصال
+                cursor = _db_conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                return _db_conn
+            except:
+                # الاتصال معطل - نغلقه
+                try:
+                    _db_conn.close()
+                except:
+                    pass
+                _db_conn = None
+        
+        # إنشاء اتصال جديد
+        _db_conn = psycopg2.connect(**_db_params)
+        return _db_conn
+        
     except Exception as e:
         print(f"❌ Database connection error: {e}")
         return None
@@ -372,11 +409,19 @@ def analyze_sentiment(text):
 # Save news to database
 def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
     """حفظ الخبر في قاعدة البيانات مع إعادة محاولة"""
+    global _db_conn
+    
     for attempt in range(retry):
+        conn = None
         try:
+            # إعادة تعيين الاتصال قبل كل محاولة
+            _db_conn = None
             conn = get_db_connection()
+            
             if not conn:
                 if attempt < retry - 1:
+                    import time
+                    time.sleep(2)
                     continue
                 return False
             
@@ -389,15 +434,17 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
             
             conn.commit()
             cursor.close()
-            conn.close()
             return True
         except Exception as e:
             print(f"❌ Save news error (attempt {attempt+1}/{retry}): {e}")
             try:
                 if conn:
-                    conn.close()
+                    conn.rollback()
             except:
                 pass
+            
+            # إعادة تعيين الاتصال العام
+            _db_conn = None
             
             if attempt < retry - 1:
                 import time
@@ -412,6 +459,19 @@ async def on_ready():
     print(f"✅ {bot.user} is online!")
     print(f"📊 Connected to {len(bot.guilds)} server(s)")
     print("📰 News Analysis System: ACTIVE")
+    
+    # Test database connection
+    try:
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            print("✅ Database: Connected (Supabase)")
+        else:
+            print("❌ Database: Connection failed")
+    except Exception as e:
+        print(f"❌ Database: Connection error - {e}")
     
     # Create table
     create_table()
