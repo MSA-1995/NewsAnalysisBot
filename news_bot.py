@@ -344,11 +344,12 @@ async def on_ready():
                 
                 # Welcome message
                 welcome_embed = discord.Embed(
-                    title="📰 News Analysis Bot",
-                    description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\n✅ **المصادر:**\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\n🔄 **التحديث:** كل 30 دقيقة\n🧠 **التحليل:** Sentiment Analysis",
+                    title="News Analysis Bot",
+                    description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\nالمصادر:\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\nالتحديث: كل 30 دقيقة\nالتحليل: Sentiment Analysis",
                     color=0x00ff00
                 )
-                welcome_embed.set_footer(text="News Analysis Bot - MSA")
+                welcome_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+                welcome_embed.set_footer(text="News Analysis Bot • MSA")
                 await news_channel.send(embed=welcome_embed)
                 
                 print(f"✅ Auto-created news channel in {guild.name}")
@@ -397,16 +398,16 @@ async def on_message(message):
                 # إرسال إشعار لروم news-analysis-bot
                 news_channel = discord.utils.get(message.guild.text_channels, name="news-analysis-bot")
                 if news_channel:
-                    sentiment_emoji = "✅" if sentiment == 'POSITIVE' else "❌" if sentiment == 'NEGATIVE' else "⚪"
                     embed = discord.Embed(
-                        title=f"{sentiment_emoji} News Detected: {symbol}",
+                        title=f"News Detected: {symbol}",
                         description=message.content[:500],
                         color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
                         timestamp=datetime.now()
                     )
                     embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
                     embed.add_field(name="Source", value=f"#{message.channel.name}", inline=True)
-                    embed.set_footer(text="News Analysis Bot")
+                    embed.set_thumbnail(url=message.guild.icon.url if message.guild.icon else None)
+                    embed.set_footer(text="News Analysis Bot • MSA")
                     
                     try:
                         await news_channel.send(embed=embed)
@@ -464,9 +465,8 @@ async def check_rss_feeds():
                             for guild in bot.guilds:
                                 news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
                                 if news_channel:
-                                    sentiment_emoji = "✅" if sentiment == 'POSITIVE' else "❌" if sentiment == 'NEGATIVE' else "⚪"
                                     embed = discord.Embed(
-                                        title=f"{sentiment_emoji} {symbol} News",
+                                        title=f"{symbol} News",
                                         description=title[:500],
                                         color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
                                         timestamp=datetime.now(),
@@ -474,7 +474,8 @@ async def check_rss_feeds():
                                     )
                                     embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
                                     embed.add_field(name="Source", value=feed.feed.get('title', 'RSS'), inline=True)
-                                    embed.set_footer(text="News Analysis Bot - RSS Feed")
+                                    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+                                    embed.set_footer(text="News Analysis Bot • MSA")
                                     
                                     try:
                                         await news_channel.send(embed=embed)
@@ -572,9 +573,8 @@ async def send_news_to_channels(symbol, title, sentiment, score, source, url):
     for guild in bot.guilds:
         news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
         if news_channel:
-            sentiment_emoji = "✅" if sentiment == 'POSITIVE' else "❌" if sentiment == 'NEGATIVE' else "⚪"
             embed = discord.Embed(
-                title=f"{sentiment_emoji} {symbol} News",
+                title=f"{symbol} News",
                 description=title[:500],
                 color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
                 timestamp=datetime.now(),
@@ -582,7 +582,8 @@ async def send_news_to_channels(symbol, title, sentiment, score, source, url):
             )
             embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
             embed.add_field(name="Source", value=source, inline=True)
-            embed.set_footer(text="News Analysis Bot")
+            embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+            embed.set_footer(text="News Analysis Bot • MSA")
             try:
                 await news_channel.send(embed=embed)
                 await asyncio.sleep(1)
@@ -603,10 +604,12 @@ async def setup_news(ctx):
     
     if existing_channel:
         embed = discord.Embed(
-            title="✅ روم الأخبار موجود",
-            description=f"الروم: {existing_channel.mention}\n📰 سيتم إرسال الأخبار هنا تلقائياً",
+            title="روم الأخبار موجود",
+            description=f"الروم: {existing_channel.mention}\nسيتم إرسال الأخبار هنا تلقائياً",
             color=0x00ff00
         )
+        embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_footer(text="News Analysis Bot • MSA")
         await ctx.send(embed=embed, delete_after=10)
         return
     
@@ -619,19 +622,22 @@ async def setup_news(ctx):
     
     # رسالة ترحيب
     welcome_embed = discord.Embed(
-        title="📰 News Analysis Bot",
-        description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\n✅ **المصادر:**\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\n🔄 **التحديث:** كل 30 دقيقة\n🧠 **التحليل:** Sentiment Analysis",
+        title="News Analysis Bot",
+        description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\nالمصادر:\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\nالتحديث: كل 30 دقيقة\nالتحليل: Sentiment Analysis",
         color=0x00ff00
     )
-    welcome_embed.set_footer(text="News Analysis Bot - MSA")
+    welcome_embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+    welcome_embed.set_footer(text="News Analysis Bot • MSA")
     await news_channel.send(embed=welcome_embed)
     
     # تأكيد
     confirm_embed = discord.Embed(
-        title="✅ تم إنشاء روم الأخبار",
-        description=f"الروم: {news_channel.mention}\n📰 سيتم إرسال الأخبار تلقائياً كل 30 دقيقة",
+        title="تم إنشاء روم الأخبار",
+        description=f"الروم: {news_channel.mention}\nسيتم إرسال الأخبار تلقائياً كل 30 دقيقة",
         color=0x00ff00
     )
+    confirm_embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+    confirm_embed.set_footer(text="News Analysis Bot • MSA")
     await ctx.send(embed=confirm_embed, delete_after=10)
     print(f"✅ News channel created: #{news_channel.name}")
 
@@ -677,37 +683,38 @@ async def news_stats(ctx):
             color = 0xffaa00
         
         embed = discord.Embed(
-            title="📊 News Sentiment Analysis",
-            description=f"**Last 24 Hours** | {overall}",
+            title="News Sentiment Analysis",
+            description=f"Last 24 Hours | {overall}",
             color=color,
             timestamp=datetime.now()
         )
         
         # Stats with progress bars
         embed.add_field(
-            name="📈 Total News Analyzed",
+            name="Total News Analyzed",
             value=f"```{total} articles```",
             inline=False
         )
         
         embed.add_field(
-            name="✅ Positive Sentiment",
+            name="Positive Sentiment",
             value=f"```{stats['positive']} articles ({pos_pct:.1f}%)```",
             inline=True
         )
         
         embed.add_field(
-            name="❌ Negative Sentiment",
+            name="Negative Sentiment",
             value=f"```{stats['negative']} articles ({neg_pct:.1f}%)```",
             inline=True
         )
         
         embed.add_field(
-            name="⚪ Neutral Sentiment",
+            name="Neutral Sentiment",
             value=f"```{stats['neutral']} articles ({neu_pct:.1f}%)```",
             inline=True
         )
         
+        embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
         embed.set_footer(text="News Analysis Bot • MSA", icon_url=bot.user.avatar.url if bot.user.avatar else None)
         
         await ctx.send(embed=embed)
@@ -746,22 +753,32 @@ async def coin_sentiment(ctx, symbol: str):
             return
         
         embed = discord.Embed(
-            title=f"📰 Recent News: {symbol}",
+            title=f"Recent News: {symbol}",
             color=0x00ff00
         )
         
         for item in news:
-            sentiment_emoji = "✅" if item['sentiment'] == 'POSITIVE' else "❌" if item['sentiment'] == 'NEGATIVE' else "⚪"
             embed.add_field(
-                name=f"{sentiment_emoji} {item['sentiment']} ({item['score']:.2f})",
+                name=f"{item['sentiment']} ({item['score']:.2f})",
                 value=f"{item['headline'][:100]}...\n{item['timestamp'].strftime('%Y-%m-%d %H:%M')}",
                 inline=False
             )
         
+        embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_footer(text="News Analysis Bot • MSA")
         await ctx.send(embed=embed)
         
     except Exception as e:
         await ctx.send(f"❌ Error: {e}")
+
+@bot.event
+async def on_command_error(ctx, error):
+    # تجاهل أخطاء الأوامر غير الموجودة
+    if isinstance(error, commands.CommandNotFound):
+        return
+    
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You need Administrator permissions to use this command!", delete_after=5)
 
 print("🚀 Starting News Analysis Bot...")
 bot.run(TOKEN)
