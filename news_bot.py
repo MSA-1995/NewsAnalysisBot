@@ -364,27 +364,42 @@ def analyze_sentiment(text):
         return 'NEUTRAL', 0.0
 
 # Save news to database
-def save_news(symbol, sentiment, score, headline, source, channel_id):
-    """حفظ الخبر في قاعدة البيانات"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO news_sentiment 
-            (symbol, sentiment, score, headline, source, channel_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (symbol, sentiment, score, headline[:500], source[:200], channel_id))
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"❌ Save news error: {e}")
-        return False
+def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
+    """حفظ الخبر في قاعدة البيانات مع إعادة محاولة"""
+    for attempt in range(retry):
+        try:
+            conn = get_db_connection()
+            if not conn:
+                if attempt < retry - 1:
+                    continue
+                return False
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO news_sentiment 
+                (symbol, sentiment, score, headline, source, channel_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (symbol, sentiment, score, headline[:500], source[:200], channel_id))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"❌ Save news error (attempt {attempt+1}/{retry}): {e}")
+            try:
+                if conn:
+                    conn.close()
+            except:
+                pass
+            
+            if attempt < retry - 1:
+                import time
+                time.sleep(2)
+            else:
+                return False
+    
+    return False
 
 @bot.event
 async def on_ready():
