@@ -3,20 +3,29 @@
 يجيب أخبار من RSS Feeds، يحللها، ويحفظها في Database
 """
 
-# ========== AUTO-UPDATE PIP ==========
+# ========== PIP UPDATE CHECK ==========
 import subprocess
 import sys
-try:
-    print("🔄 Checking pip updates...")
-    result = subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'], 
-                           capture_output=True, check=False, timeout=30, text=True)
-    if "Successfully installed" in result.stdout:
-        print("✅ pip updated successfully")
-    else:
-        print("✅ pip is up to date")
-except Exception as e:
-    print(f"⚠️ pip update skipped: {e}")
-    
+
+def check_pip_update():
+    """فحص وتحديث pip"""
+    try:
+        print("🔄 Checking pip updates...")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "pip"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            print("✅ pip updated successfully")
+        else:
+            print("✅ pip is up to date")
+    except Exception as e:
+        print(f"⚠️ pip check skipped: {e}")
+
+check_pip_update()
+
 # ========== LOAD ENV FILE ==========
 import os
 for _env_file in [
@@ -428,16 +437,19 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
     for attempt in range(retry):
         conn = None
         try:
-            # إعادة تعيين الاتصال قبل كل محاولة
-            _db_conn = None
-            conn = get_db_connection()
+            # إنشاء اتصال جديد مباشرة (بدون إعادة استخدام)
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(DATABASE_URL)
             
-            if not conn:
-                if attempt < retry - 1:
-                    import time
-                    time.sleep(2)
-                    continue
-                return False
+            conn = psycopg2.connect(
+                host=parsed.hostname,
+                port=parsed.port,
+                database=parsed.path[1:],
+                user=parsed.username,
+                password=unquote(parsed.password),
+                sslmode='require',
+                connect_timeout=10
+            )
             
             cursor = conn.cursor()
             cursor.execute("""
@@ -448,17 +460,16 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
             
             conn.commit()
             cursor.close()
+            conn.close()
             return True
         except Exception as e:
             print(f"❌ Save news error (attempt {attempt+1}/{retry}): {e}")
             try:
                 if conn:
                     conn.rollback()
+                    conn.close()
             except:
                 pass
-            
-            # إعادة تعيين الاتصال العام
-            _db_conn = None
             
             if attempt < retry - 1:
                 import time
