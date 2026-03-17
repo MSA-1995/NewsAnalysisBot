@@ -548,9 +548,12 @@ async def on_message(message):
     if message.author.bot:
         return
     
-    # Process all messages (you can filter by channel later)
-    # For now, analyze all messages containing crypto keywords
+    # Only process messages in news-analysis-bot channel
+    if message.channel.name != "news-analysis-bot":
+        await bot.process_commands(message)
+        return
     
+    # Analyze messages only in news channel
     symbols = extract_symbols(message.content)
     
     if symbols:
@@ -569,24 +572,22 @@ async def on_message(message):
             if saved:
                 print(f"📰 News saved: {symbol} | {sentiment} ({score:.2f}) | {message.channel.name}")
                 
-                # إرسال إشعار لروم news-analysis-bot
-                news_channel = discord.utils.get(message.guild.text_channels, name="news-analysis-bot")
-                if news_channel:
-                    embed = discord.Embed(
-                        title=f"News Detected: {symbol}",
-                        description=message.content[:500],
-                        color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
-                        timestamp=datetime.now()
-                    )
-                    embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
-                    embed.add_field(name="Source", value=f"#{message.channel.name}", inline=True)
-                    embed.set_thumbnail(url=message.guild.icon.url if message.guild.icon else None)
-                    embed.set_footer(text="News Analysis Bot • MSA")
-                    
-                    try:
-                        await news_channel.send(embed=embed)
-                    except:
-                        pass
+                # Send notification in same channel
+                embed = discord.Embed(
+                    title=f"News Detected: {symbol}",
+                    description=message.content[:500],
+                    color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+                embed.add_field(name="Source", value=f"#{message.channel.name}", inline=True)
+                embed.set_thumbnail(url=message.guild.icon.url if message.guild.icon else None)
+                embed.set_footer(text="News Analysis Bot • MSA")
+                
+                try:
+                    await message.channel.send(embed=embed)
+                except:
+                    pass
     
     await bot.process_commands(message)
 
