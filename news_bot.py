@@ -53,11 +53,41 @@ from textblob import TextBlob
 import feedparser
 import asyncio
 import re
-from config_encrypted import get_discord_token
+import requests
+from config_encrypted import get_discord_token, get_critical_webhook
 
 # Environment Variables
 TOKEN = get_discord_token()
 DATABASE_URL = os.getenv("DATABASE_URL")
+CRITICAL_WEBHOOK = get_critical_webhook()
+
+def send_critical_alert(error_type, message, details=None):
+    """Send critical error alert to Discord"""
+    if not CRITICAL_WEBHOOK:
+        return
+    
+    fields = [
+        {"name": "Bot", "value": "News Bot", "inline": True},
+        {"name": "Error Type", "value": error_type, "inline": True},
+        {"name": "Timestamp", "value": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "inline": True},
+        {"name": "Message", "value": message, "inline": False}
+    ]
+    
+    if details:
+        fields.append({"name": "Details", "value": str(details)[:1000], "inline": False})
+    
+    embed = {
+        "title": "🚨 CRITICAL ALERT",
+        "color": 0xff0000,
+        "fields": fields,
+        "footer": {"text": "MSA News Bot • System Alerts"},
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    try:
+        requests.post(CRITICAL_WEBHOOK, json={"embeds": [embed]}, timeout=5)
+    except:
+        pass
 
 if not TOKEN:
     print("❌ Error: Failed to decrypt DISCORD_TOKEN!")
@@ -266,6 +296,7 @@ def get_db_connection():
         
     except Exception as e:
         print(f"❌ Database connection error: {e}")
+        send_critical_alert("Database Connection", "Failed to connect to database", str(e))
         return None
 
 # Create news_sentiment table
@@ -304,6 +335,8 @@ def create_table():
             return
         except Exception as e:
             print(f"❌ Table creation error (attempt {attempt+1}/3): {e}")
+            if attempt == 2:
+                send_critical_alert("Database Table Error", "Failed to create news_sentiment table", str(e))
             try:
                 if conn:
                     conn.close()
@@ -956,4 +989,9 @@ async def on_command_error(ctx, error):
         await ctx.send("❌ You need Administrator permissions to use this command!", delete_after=5)
 
 print("🚀 Starting News Analysis Bot...")
-bot.run(TOKEN)
+try:
+    bot.run(TOKEN)
+except Exception as e:
+    print(f"❌ Bot crashed: {e}")
+    send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
+
