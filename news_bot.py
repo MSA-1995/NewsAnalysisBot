@@ -26,6 +26,9 @@ def check_pip_update():
 
 check_pip_update()
 
+# ========== TEST AUTO-UPDATE ==========
+print("🔥 TEST: Auto-update is working! Version 1.0.1")
+
 # ========== LOAD ENV FILE ==========
 import os
 for _env_file in [
