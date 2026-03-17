@@ -447,8 +447,12 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
                 database=parsed.path[1:],
                 user=parsed.username,
                 password=unquote(parsed.password),
-                sslmode='require',
-                connect_timeout=10
+                sslmode='prefer',  # prefer بدلاً من require
+                connect_timeout=15,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5
             )
             
             cursor = conn.cursor()
@@ -473,7 +477,7 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
             
             if attempt < retry - 1:
                 import time
-                time.sleep(2)
+                time.sleep(3)  # زيادة الانتظار من 2 إلى 3 ثواني
             else:
                 return False
     
