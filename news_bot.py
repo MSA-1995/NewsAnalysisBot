@@ -347,25 +347,23 @@ def create_table():
                 import time
                 time.sleep(2)
 
-# قائمة العملات الثابتة (50 عملة - موحدة مع بوت التداول)
+# قائمة العملات الثابتة (Top 50 by Market Cap - March 2026)
 SYMBOLS = [
-    # كبار العملات
-    'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
-    'ADA/USDT', 'AVAX/USDT', 'DOGE/USDT', 'TRX/USDT', 'DOT/USDT',
-    # DeFi
-    'LINK/USDT', 'UNI/USDT', 'AAVE/USDT', 'CRV/USDT', 'LDO/USDT',
-    'SUSHI/USDT', 'COMP/USDT', 'SNX/USDT', 'ZRX/USDT', '1INCH/USDT',
-    # Layer 2
-    'ARB/USDT', 'OP/USDT', 'POL/USDT', 'IMX/USDT', 'LRC/USDT',
-    # Layer 1
-    'ATOM/USDT', 'NEAR/USDT', 'APT/USDT', 'SUI/USDT', 'SEI/USDT',
-    'INJ/USDT', 'TIA/USDT', 'S/USDT', 'ALGO/USDT', 'EGLD/USDT',
-    # Meme & Others
-    'SHIB/USDT', 'PEPE/USDT', 'FLOKI/USDT', 'WIF/USDT', 'BONK/USDT',
-    # Exchange & Infra
-    'LTC/USDT', 'BCH/USDT', 'FIL/USDT', 'ICP/USDT', 'RENDER/USDT',
-    # Gaming & NFT
-    'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'ENJ/USDT', 'GALA/USDT',
+    # Top 10 - Giants
+    'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'SOL/USDT',
+    'DOGE/USDT', 'ADA/USDT', 'TRX/USDT', 'AVAX/USDT', 'TON/USDT',
+    # 11-20 - Major Alts
+    'LINK/USDT', 'DOT/USDT', 'BCH/USDT', 'NEAR/USDT', 'LTC/USDT',
+    'UNI/USDT', 'ATOM/USDT', 'XLM/USDT', 'HBAR/USDT', 'ICP/USDT',
+    # 21-30 - Strong Layer 1 & Layer 2
+    'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'INJ/USDT',
+    'TIA/USDT', 'SEI/USDT', 'FTM/USDT', 'ALGO/USDT', 'VET/USDT',
+    # 31-40 - DeFi & Infrastructure
+    'AAVE/USDT', 'FIL/USDT', 'RENDER/USDT', 'GRT/USDT', 'RUNE/USDT',
+    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'MKR/USDT', 'THETA/USDT',
+    # 41-50 - Meme, Gaming & Others
+    'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
+    'IMX/USDT', 'SAND/USDT', 'MANA/USDT', 'AXS/USDT', 'GALA/USDT',
 ]
 
 # Extract crypto symbols from text
@@ -373,64 +371,62 @@ def extract_symbols(text):
     """استخراج رموز العملات من النص"""
     symbols = []
     
-    # Common crypto keywords (موسع ليشمل كل الـ 50 عملة)
+    # Common crypto keywords (Top 50 - March 2026)
     crypto_keywords = {
-        # كبار العملات
+        # Top 10 - Giants
         'BTC': 'BTC/USDT', 'BITCOIN': 'BTC/USDT',
         'ETH': 'ETH/USDT', 'ETHEREUM': 'ETH/USDT',
+        'XRP': 'XRP/USDT', 'RIPPLE': 'XRP/USDT',
         'BNB': 'BNB/USDT', 'BINANCE': 'BNB/USDT',
         'SOL': 'SOL/USDT', 'SOLANA': 'SOL/USDT',
-        'XRP': 'XRP/USDT', 'RIPPLE': 'XRP/USDT',
-        'ADA': 'ADA/USDT', 'CARDANO': 'ADA/USDT',
-        'AVAX': 'AVAX/USDT', 'AVALANCHE': 'AVAX/USDT',
         'DOGE': 'DOGE/USDT', 'DOGECOIN': 'DOGE/USDT',
+        'ADA': 'ADA/USDT', 'CARDANO': 'ADA/USDT',
         'TRX': 'TRX/USDT', 'TRON': 'TRX/USDT',
-        'DOT': 'DOT/USDT', 'POLKADOT': 'DOT/USDT',
-        # DeFi
+        'AVAX': 'AVAX/USDT', 'AVALANCHE': 'AVAX/USDT',
+        'TON': 'TON/USDT', 'TONCOIN': 'TON/USDT',
+        # 11-20 - Major Alts
         'LINK': 'LINK/USDT', 'CHAINLINK': 'LINK/USDT',
+        'DOT': 'DOT/USDT', 'POLKADOT': 'DOT/USDT',
+        'BCH': 'BCH/USDT', 'BITCOIN CASH': 'BCH/USDT',
+        'NEAR': 'NEAR/USDT',
+        'LTC': 'LTC/USDT', 'LITECOIN': 'LTC/USDT',
         'UNI': 'UNI/USDT', 'UNISWAP': 'UNI/USDT',
-        'AAVE': 'AAVE/USDT',
-        'CRV': 'CRV/USDT', 'CURVE': 'CRV/USDT',
-        'LDO': 'LDO/USDT', 'LIDO': 'LDO/USDT',
-        'SUSHI': 'SUSHI/USDT', 'SUSHISWAP': 'SUSHI/USDT',
-        'COMP': 'COMP/USDT', 'COMPOUND': 'COMP/USDT',
-        'SNX': 'SNX/USDT', 'SYNTHETIX': 'SNX/USDT',
-        'ZRX': 'ZRX/USDT',
-        '1INCH': '1INCH/USDT',
-        # Layer 2
+        'ATOM': 'ATOM/USDT', 'COSMOS': 'ATOM/USDT',
+        'XLM': 'XLM/USDT', 'STELLAR': 'XLM/USDT',
+        'HBAR': 'HBAR/USDT', 'HEDERA': 'HBAR/USDT',
+        'ICP': 'ICP/USDT', 'INTERNET COMPUTER': 'ICP/USDT',
+        # 21-30 - Strong Layer 1 & Layer 2
+        'APT': 'APT/USDT', 'APTOS': 'APT/USDT',
         'ARB': 'ARB/USDT', 'ARBITRUM': 'ARB/USDT',
         'OP': 'OP/USDT', 'OPTIMISM': 'OP/USDT',
-        'POL': 'POL/USDT', 'POLYGON': 'POL/USDT', 'MATIC': 'POL/USDT',
-        'IMX': 'IMX/USDT', 'IMMUTABLE': 'IMX/USDT',
-        'LRC': 'LRC/USDT', 'LOOPRING': 'LRC/USDT',
-        # Layer 1
-        'ATOM': 'ATOM/USDT', 'COSMOS': 'ATOM/USDT',
-        'NEAR': 'NEAR/USDT',
-        'APT': 'APT/USDT', 'APTOS': 'APT/USDT',
         'SUI': 'SUI/USDT',
-        'SEI': 'SEI/USDT',
         'INJ': 'INJ/USDT', 'INJECTIVE': 'INJ/USDT',
         'TIA': 'TIA/USDT', 'CELESTIA': 'TIA/USDT',
-        'S': 'S/USDT',
+        'SEI': 'SEI/USDT',
+        'FTM': 'FTM/USDT', 'FANTOM': 'FTM/USDT',
         'ALGO': 'ALGO/USDT', 'ALGORAND': 'ALGO/USDT',
-        'EGLD': 'EGLD/USDT', 'ELROND': 'EGLD/USDT',
-        # Meme & Others
+        'VET': 'VET/USDT', 'VECHAIN': 'VET/USDT',
+        # 31-40 - DeFi & Infrastructure
+        'AAVE': 'AAVE/USDT',
+        'FIL': 'FIL/USDT', 'FILECOIN': 'FIL/USDT',
+        'RENDER': 'RENDER/USDT',
+        'GRT': 'GRT/USDT', 'GRAPH': 'GRT/USDT',
+        'RUNE': 'RUNE/USDT', 'THORCHAIN': 'RUNE/USDT',
+        'LDO': 'LDO/USDT', 'LIDO': 'LDO/USDT',
+        'CRV': 'CRV/USDT', 'CURVE': 'CRV/USDT',
+        'SNX': 'SNX/USDT', 'SYNTHETIX': 'SNX/USDT',
+        'MKR': 'MKR/USDT', 'MAKER': 'MKR/USDT',
+        'THETA': 'THETA/USDT',
+        # 41-50 - Meme, Gaming & Others
         'SHIB': 'SHIB/USDT', 'SHIBA': 'SHIB/USDT',
         'PEPE': 'PEPE/USDT',
-        'FLOKI': 'FLOKI/USDT',
         'WIF': 'WIF/USDT',
+        'FLOKI': 'FLOKI/USDT',
         'BONK': 'BONK/USDT',
-        # Exchange & Infra
-        'LTC': 'LTC/USDT', 'LITECOIN': 'LTC/USDT',
-        'BCH': 'BCH/USDT', 'BITCOIN CASH': 'BCH/USDT',
-        'FIL': 'FIL/USDT', 'FILECOIN': 'FIL/USDT',
-        'ICP': 'ICP/USDT', 'INTERNET COMPUTER': 'ICP/USDT',
-        'RENDER': 'RENDER/USDT',
-        # Gaming & NFT
-        'AXS': 'AXS/USDT', 'AXIE': 'AXS/USDT',
+        'IMX': 'IMX/USDT', 'IMMUTABLE': 'IMX/USDT',
         'SAND': 'SAND/USDT', 'SANDBOX': 'SAND/USDT',
         'MANA': 'MANA/USDT', 'DECENTRALAND': 'MANA/USDT',
-        'ENJ': 'ENJ/USDT', 'ENJIN': 'ENJ/USDT',
+        'AXS': 'AXS/USDT', 'AXIE': 'AXS/USDT',
         'GALA': 'GALA/USDT',
     }
     
