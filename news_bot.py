@@ -357,10 +357,10 @@ SYMBOLS = [
     'UNI/USDT', 'ATOM/USDT', 'XLM/USDT', 'HBAR/USDT', 'ICP/USDT',
     # 21-30 - Strong Layer 1 & Layer 2
     'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'INJ/USDT',
-    'TIA/USDT', 'SEI/USDT', 'FTM/USDT', 'ALGO/USDT', 'VET/USDT',
+    'TIA/USDT', 'SEI/USDT', 'POL/USDT', 'ALGO/USDT', 'VET/USDT',
     # 31-40 - DeFi & Infrastructure
     'AAVE/USDT', 'FIL/USDT', 'RENDER/USDT', 'GRT/USDT', 'RUNE/USDT',
-    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'MKR/USDT', 'THETA/USDT',
+    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'COMP/USDT', 'SUSHI/USDT',
     # 41-50 - Meme, Gaming & Others
     'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
     'IMX/USDT', 'SAND/USDT', 'MANA/USDT', 'AXS/USDT', 'GALA/USDT',
