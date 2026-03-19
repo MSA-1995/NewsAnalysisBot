@@ -8,7 +8,7 @@ from discord.ext import commands, tasks
 import os
 import asyncio
 from datetime import datetime
-from config import TOKEN, RSS_FEEDS, SYMBOLS
+from config import RSS_FEEDS, SYMBOLS
 from database import get_db_connection, create_table, save_news, cleanup_old_news, get_news_stats, get_coin_sentiment
 from news_fetcher import check_rss_feeds
 from sentiment import analyze_sentiment
