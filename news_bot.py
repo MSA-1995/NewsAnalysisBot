@@ -317,54 +317,6 @@ async def before_check_rss():
 
 
 
-@bot.command()
-async def coin_sentiment(ctx, symbol: str):
-    """عرض sentiment لعملة معينة"""
-    try:
-        if not symbol.endswith('/USDT'):
-            symbol = f"{symbol.upper()}/USDT"
-        
-        conn = get_db_connection()
-        if not conn:
-            await ctx.send("❌ Database connection failed!")
-            return
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
-            SELECT sentiment, score, headline, timestamp
-            FROM news_sentiment
-            WHERE symbol = %s
-            AND timestamp > NOW() - INTERVAL '24 hours'
-            ORDER BY timestamp DESC
-            LIMIT 5
-        """, (symbol,))
-        
-        news = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        if not news:
-            await ctx.send(f"📰 No recent news for {symbol}")
-            return
-        
-        embed = discord.Embed(
-            title=f"Recent News: {symbol}",
-            color=0x00ff00
-        )
-        
-        for item in news:
-            embed.add_field(
-                name=f"{item['sentiment']} ({item['score']:.2f})",
-                value=f"{item['headline'][:100]}...\n{item['timestamp'].strftime('%Y-%m-%d %H:%M')}",
-                inline=False
-            )
-        
-        embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
-        embed.set_footer(text="News Analysis Bot • MSA")
-        await ctx.send(embed=embed)
-        
-    except Exception as e:
-        await ctx.send(f"❌ Error: {e}")
 
 @bot.event
 async def on_command_error(ctx, error):
