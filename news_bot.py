@@ -315,52 +315,6 @@ async def send_news_to_channels(symbol, title, sentiment, score, source, url):
 async def before_check_rss():
     await bot.wait_until_ready()
 
-@bot.command()
-async def setup_news(ctx):
-    """إنشاء روم الأخبار تلقائياً"""
-    await ctx.message.delete()
-    
-    # فحص إذا الروم موجود
-    existing_channel = discord.utils.get(ctx.guild.text_channels, name="news-analysis-bot")
-    
-    if existing_channel:
-        embed = discord.Embed(
-            title="روم الأخبار موجود",
-            description=f"الروم: {existing_channel.mention}\nسيتم إرسال الأخبار هنا تلقائياً",
-            color=0x00ff00
-        )
-        embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
-        embed.set_footer(text="News Analysis Bot • MSA")
-        await ctx.send(embed=embed, delete_after=10)
-        return
-    
-    # إنشاء الروم
-    news_channel = await ctx.guild.create_text_channel(
-        name="news-analysis-bot",
-        topic="📰 Crypto News Analysis - Automated RSS Feeds",
-        reason="News Analysis Bot Setup"
-    )
-    
-    # رسالة ترحيب
-    welcome_embed = discord.Embed(
-        title="News Analysis Bot",
-        description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\nالمصادر:\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\nالتحديث: كل 30 دقيقة\nالتحليل: Sentiment Analysis",
-        color=0x00ff00
-    )
-    welcome_embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
-    welcome_embed.set_footer(text="News Analysis Bot • MSA")
-    await news_channel.send(embed=welcome_embed)
-    
-    # تأكيد
-    confirm_embed = discord.Embed(
-        title="تم إنشاء روم الأخبار",
-        description=f"الروم: {news_channel.mention}\nسيتم إرسال الأخبار تلقائياً كل 30 دقيقة",
-        color=0x00ff00
-    )
-    confirm_embed.set_thumbnail(url=ctx.guild.icon.url if ctx.guild.icon else None)
-    confirm_embed.set_footer(text="News Analysis Bot • MSA")
-    await ctx.send(embed=confirm_embed, delete_after=10)
-    print(f"✅ News channel created: #{news_channel.name}")
 
 @bot.command()
 async def news_stats(ctx):
