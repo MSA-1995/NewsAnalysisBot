@@ -4,6 +4,7 @@ Main entry point - imports all modules and starts the bot
 """
 
 # Import all modules
+import discord
 from utils import check_pip_update, load_env_file
 from config_encrypted import get_discord_token
 from discord_bot import bot
