@@ -6,8 +6,6 @@ Task scheduling functions
 from discord.ext import tasks
 from news_fetcher import check_rss_feeds
 from database import cleanup_old_news
-from health_monitor import check_bots_health_async
-from monitor import update_bot_status, update_trainer_status
 
 # RSS Feed Checker
 @tasks.loop(minutes=30)
