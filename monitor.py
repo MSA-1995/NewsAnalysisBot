@@ -88,18 +88,26 @@ def _build_embed(status):
         base.update({
             "title": "Trading Bot — ONLINE",
             "color": 0x00ff00,
+            "description": "حالة البوت الرئيسي للتداول\nيعمل بشكل طبيعي ويراقب السوق",
             "fields": [
                 {"name": "الحالة", "value": "متصل", "inline": True},
                 {"name": "آخر تحديث", "value": now, "inline": True},
+                {"name": "نظام المراقبة", "value": "يعمل بشكل طبيعي", "inline": False},
+                {"name": "معدل التحديث", "value": "كل 10 ثواني", "inline": True},
+                {"name": "البيئة", "value": "Binance Testnet", "inline": True},
             ],
         })
     else:
         base.update({
             "title": "Trading Bot — OFFLINE",
             "color": 0xff0000,
+            "description": "حالة البوت الرئيسي للتداول\nالبوت متوقف أو انقطع الاتصال",
             "fields": [
                 {"name": "الحالة", "value": "غير متصل", "inline": True},
                 {"name": "آخر تحديث", "value": now, "inline": True},
+                {"name": "تنبيه", "value": "البوت توقف أو انقطع الاتصال", "inline": False},
+                {"name": "معدل التحديث", "value": "كل 10 ثواني", "inline": True},
+                {"name": "البيئة", "value": "Binance Testnet", "inline": True},
             ],
         })
 
