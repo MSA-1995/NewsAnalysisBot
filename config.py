@@ -67,7 +67,7 @@ RSS_FEEDS = [
 # قائمة العملات الثابتة (Top 50 by Market Cap - March 2026)
 SYMBOLS = [
     # Top 10 - Giants
-    'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'SOL/USDT', 'DOGE/USDT', 'ADA/USDT', 'TRX/USDT', 'MATIC/USDT', 'TON/USDT', # AVAX -> MATIC
+    'BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'SOL/USDT', 'DOGE/USDT', 'ADA/USDT', 'TRX/USDT', 'AVAX/USDT', 'TON/USDT', 
     # 11-20 - Major Alts
     'LINK/USDT', 'DOT/USDT', 'BCH/USDT', 'NEAR/USDT', 'LTC/USDT',
     'UNI/USDT', 'ATOM/USDT', 'XLM/USDT', 'HBAR/USDT', 'ICP/USDT',
@@ -75,8 +75,8 @@ SYMBOLS = [
     'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'INJ/USDT',
     'TIA/USDT', 'SEI/USDT', 'POL/USDT', 'ALGO/USDT', 'VET/USDT',
     # 31-40 - DeFi & Infrastructure
-    'AAVE/USDT', 'FIL/USDT', 'RENDER/USDT', 'FTM/USDT', 'RUNE/USDT', # GRT -> FTM
-    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'COMP/USDT', 'ETC/USDT', # SUSHI -> ETC
+    'AAVE/USDT', 'FIL/USDT', 'RENDER/USDT', 'NEO/USDT', 'RUNE/USDT', 
+    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'COMP/USDT', 'ETC/USDT', 
     # 41-50 - Meme, Gaming & Others
     'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
     'IMX/USDT', 'SAND/USDT', 'MANA/USDT', 'AXS/USDT', 'GALA/USDT',
