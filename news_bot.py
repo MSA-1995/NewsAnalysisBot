@@ -102,7 +102,7 @@ async def on_ready():
         check_trading_bot.start()
         print("👁️ Trading Bot Monitor: STARTED")
 
-@tasks.loop(seconds=10)
+@tasks.loop(seconds=30)
 async def check_trading_bot():
     """مراقبة البوت الرئيسي كل 10 ثواني"""
     update_bot_status()
