@@ -82,3 +82,12 @@ SYMBOLS = [
     'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
     'IMX/USDT', 'SAND/USDT', 'MANA/USDT', 'AXS/USDT', 'GALA/USDT',
 ]
+
+# Health Check Configuration - Bot URLs
+HEALTH_CHECK_CONFIG = {
+    'trading_bot_url': os.getenv('TRADING_BOT_HEALTH_URL', 'http://localhost:5001/health'),
+    'trainer_bot_url': os.getenv('TRAINER_BOT_HEALTH_URL', 'http://localhost:5002/health'),
+    'timeout': int(os.getenv('HEALTH_CHECK_TIMEOUT', '5')),
+    'retry_attempts': int(os.getenv('HEALTH_CHECK_RETRIES', '2')),
+    'retry_delay': int(os.getenv('HEALTH_CHECK_RETRY_DELAY', '1'))
+}
