@@ -17,7 +17,13 @@ CHECK_INTERVAL_SECONDS = 10  # كل 10 ثواني يفحص
 
 # حالة الرسالة الثابتة
 _status_message_id = None
-_current_status = None  # 'ONLINE' أو 'OFFLINE'
+_current_status = None
+_server_icon = None  # صورة السيرفر
+
+def set_server_icon(icon_url):
+    """تحديد صورة السيرفر"""
+    global _server_icon
+    _server_icon = icon_url
 
 # ========== إرسال/تحديث الرسالة الثابتة ==========
 
@@ -70,28 +76,34 @@ def _build_embed(status):
     """بناء الـ embed حسب الحالة"""
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+    base = {
+        "footer": {"text": "MSA Trading Bot • System Monitor"},
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+    if _server_icon:
+        base["thumbnail"] = {"url": _server_icon}
+
     if status == 'ONLINE':
-        return {
-            "title": "🟢  Trading Bot — ONLINE",
+        base.update({
+            "title": "Trading Bot — ONLINE",
             "color": 0x00ff00,
-            "description": "─────────────────────────────",
             "fields": [
-                {"name": "🖥️ الحالة", "value": "متصل", "inline": True},
-                {"name": "🕐 آخر تحديث", "value": now, "inline": True},
+                {"name": "الحالة", "value": "متصل", "inline": True},
+                {"name": "آخر تحديث", "value": now, "inline": True},
             ],
-            "footer": {"text": "MSA Trading Bot • System Monitor"}
-        }
+        })
     else:
-        return {
-            "title": "🔴  Trading Bot — OFFLINE",
+        base.update({
+            "title": "Trading Bot — OFFLINE",
             "color": 0xff0000,
-            "description": "─────────────────────────────",
             "fields": [
-                {"name": "🖥️ الحالة", "value": "غير متصل", "inline": True},
-                {"name": "🕐 آخر تحديث", "value": now, "inline": True},
+                {"name": "الحالة", "value": "غير متصل", "inline": True},
+                {"name": "آخر تحديث", "value": now, "inline": True},
             ],
-            "footer": {"text": "MSA Trading Bot • System Monitor"}
-        }
+        })
+
+    return base
 
 
 def update_bot_status():
