@@ -31,6 +31,7 @@ from database import get_db_connection, create_table, save_news
 from sentiment import analyze_sentiment
 from scheduler import check_rss_feeds, cleanup_old_news
 from monitor import update_bot_status, update_trainer_status
+from health_monitor import check_bots_health_async, get_trading_bot_health_status, get_trainer_health_status
 
 @bot.event
 async def on_ready():
@@ -106,6 +107,11 @@ async def on_ready():
         check_trainer_bot.start()
         print("👁️ Trainer Bot Monitor: STARTED")
 
+    # Start health check monitor
+    if not health_check_monitor.is_running():
+        health_check_monitor.start()
+        print("🏥 Health Check Monitor: STARTED")
+
 @tasks.loop(seconds=10)
 async def check_trading_bot():
     """مراقبة البوت الرئيسي كل 10 ثواني"""
@@ -122,6 +128,20 @@ async def before_monitor():
 
 @check_trainer_bot.before_loop
 async def before_trainer_monitor():
+    await bot.wait_until_ready()
+
+# Health Check Monitor Task
+@tasks.loop(seconds=30)
+async def health_check_monitor():
+    """فحص حالة البوتات الأخرى باستخدام Health Check"""
+    try:
+        await check_bots_health_async()
+        print(f"🏥 Health check completed: Trading={get_trading_bot_health_status()}, Trainer={get_trainer_health_status()}")
+    except Exception as e:
+        print(f"❌ Health check error: {e}")
+
+@health_check_monitor.before_loop
+async def before_health_check():
     await bot.wait_until_ready()
 
 @bot.event
