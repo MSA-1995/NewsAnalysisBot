@@ -6,7 +6,7 @@
 
 import requests
 from datetime import datetime, timezone
-from database import get_trading_bot_status
+from database import get_trading_bot_status, save_status_message_id
 from config_encrypted import get_critical_webhook
 
 CRITICAL_WEBHOOK = get_critical_webhook()
@@ -43,6 +43,7 @@ def _send_status_message(status):
         )
         if r.status_code == 200:
             _status_message_id = r.json().get('id')
+            save_status_message_id(_status_message_id)
             print(f"✅ Status message sent — ID: {_status_message_id}")
     except Exception as e:
         print(f"⚠️ Send status error: {e}")
@@ -137,7 +138,12 @@ def update_bot_status():
         else:
             new_status = 'OFFLINE'
 
-    # أول مرة — أرسل الرسالة
+        # استرجاع message ID من الداتابيز لو ما عندنا
+        if _status_message_id is None and row.get('status_message_id'):
+            _status_message_id = row['status_message_id']
+            print(f"✅ Restored message ID: {_status_message_id}")
+
+    # أول مرة — أرسل رسالة جديدة
     if _status_message_id is None:
         _current_status = new_status
         _send_status_message(new_status)
@@ -149,5 +155,5 @@ def update_bot_status():
         _current_status = new_status
         _edit_status_message(new_status)
     else:
-        # نفس الحالة — عدّل الوقت فقط (كل 10 ثواني)
+        # نفس الحالة — عدّل الوقت فقط
         _edit_status_message(new_status)
