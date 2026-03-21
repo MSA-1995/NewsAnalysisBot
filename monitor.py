@@ -12,7 +12,7 @@ from config_encrypted import get_critical_webhook
 CRITICAL_WEBHOOK = get_critical_webhook()
 
 # ========== إعدادات ==========
-HEARTBEAT_TIMEOUT = 90       # ثانية
+HEARTBEAT_TIMEOUT = 180       # ثانية
 TRAINER_TIMEOUT   = 180      # ثانية — التدريب يأخذ وقت أطول
 
 # حالة البوت الرئيسي
