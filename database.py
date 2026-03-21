@@ -181,7 +181,11 @@ def get_trading_bot_status():
             connect_timeout=10
         )
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT last_beat, status, status_message_id FROM bot_heartbeat WHERE id = 1")
+        cursor.execute("""
+            SELECT last_beat, status, status_message_id,
+                   EXTRACT(EPOCH FROM (NOW() - last_beat)) as seconds_since
+            FROM bot_heartbeat WHERE id = 1
+        """)
         row = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -213,6 +217,58 @@ def save_status_message_id(message_id):
         conn.close()
     except Exception as e:
         print(f"⚠️ Save message ID error: {e}")
+
+def get_trainer_status():
+    """قراءة حالة سكريبت التدريب من الداتابيز"""
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=unquote(parsed.password),
+            sslmode='prefer',
+            connect_timeout=10
+        )
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT last_beat, status, status_message_id,
+                   EXTRACT(EPOCH FROM (NOW() - last_beat)) as seconds_since
+            FROM trainer_heartbeat WHERE id = 1
+        """)
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row
+    except Exception as e:
+        print(f"⚠️ Trainer status read error: {e}")
+        return None
+
+def save_trainer_message_id(message_id):
+    """حفظ message ID رسالة التدريب"""
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=unquote(parsed.password),
+            sslmode='prefer',
+            connect_timeout=10
+        )
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE trainer_heartbeat SET status_message_id = %s WHERE id = 1
+        """, (str(message_id) if message_id else None,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ Save trainer message ID error: {e}")
 
 # ========== باقي الدوال ==========
 
