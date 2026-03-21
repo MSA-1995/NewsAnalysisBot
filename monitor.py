@@ -12,8 +12,8 @@ from config_encrypted import get_critical_webhook
 CRITICAL_WEBHOOK = get_critical_webhook()
 
 # ========== إعدادات ==========
-HEARTBEAT_TIMEOUT = 120      # ثانية — لو ما في نبضة خلال 120 ثانية = أوفلاين
-CHECK_INTERVAL_SECONDS = 10  # كل 10 ثواني يفحص
+HEARTBEAT_TIMEOUT = 90      # ثانية — لو ما في نبضة خلال 120 ثانية = أوفلاين
+CHECK_INTERVAL_SECONDS = 30  # كل 10 ثواني يفحص
 
 # حالة الرسالة الثابتة
 _status_message_id = None
