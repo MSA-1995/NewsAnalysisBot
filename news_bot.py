@@ -30,7 +30,7 @@ from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_ne
 from database import get_db_connection, create_table, save_news
 from sentiment import analyze_sentiment
 from scheduler import check_rss_feeds, cleanup_old_news
-from monitor import update_bot_status
+from monitor import update_bot_status, update_trainer_status
 
 @bot.event
 async def on_ready():
@@ -93,7 +93,6 @@ async def on_ready():
 
     # Start trading bot monitor
     if not check_trading_bot.is_running():
-        # تمرير صورة السيرفر
         from monitor import set_server_icon
         for guild in bot.guilds:
             if guild.icon:
@@ -102,13 +101,27 @@ async def on_ready():
         check_trading_bot.start()
         print("👁️ Trading Bot Monitor: STARTED")
 
-@tasks.loop(seconds=30)
+    # Start trainer monitor
+    if not check_trainer_bot.is_running():
+        check_trainer_bot.start()
+        print("👁️ Trainer Bot Monitor: STARTED")
+
+@tasks.loop(seconds=10)
 async def check_trading_bot():
     """مراقبة البوت الرئيسي كل 10 ثواني"""
     update_bot_status()
 
+@tasks.loop(seconds=30)
+async def check_trainer_bot():
+    """مراقبة سكريبت التدريب كل 30 ثانية"""
+    update_trainer_status()
+
 @check_trading_bot.before_loop
 async def before_monitor():
+    await bot.wait_until_ready()
+
+@check_trainer_bot.before_loop
+async def before_trainer_monitor():
     await bot.wait_until_ready()
 
 @bot.event
