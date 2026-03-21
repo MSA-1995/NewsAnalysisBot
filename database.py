@@ -126,8 +126,15 @@ def create_table():
                 CREATE TABLE IF NOT EXISTS bot_heartbeat (
                     id INTEGER PRIMARY KEY DEFAULT 1,
                     last_beat TIMESTAMP DEFAULT NOW(),
-                    status VARCHAR(20) DEFAULT 'ONLINE'
+                    status VARCHAR(20) DEFAULT 'ONLINE',
+                    status_message_id VARCHAR(50) DEFAULT NULL
                 )
+            """)
+            
+            # إضافة العمود لو ما كان موجود (للجداول القديمة)
+            cursor.execute("""
+                ALTER TABLE bot_heartbeat 
+                ADD COLUMN IF NOT EXISTS status_message_id VARCHAR(50) DEFAULT NULL
             """)
             
             # إدخال صف واحد ثابت إذا ما كان موجود
@@ -174,7 +181,7 @@ def get_trading_bot_status():
             connect_timeout=10
         )
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT last_beat, status FROM bot_heartbeat WHERE id = 1")
+        cursor.execute("SELECT last_beat, status, status_message_id FROM bot_heartbeat WHERE id = 1")
         row = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -182,6 +189,30 @@ def get_trading_bot_status():
     except Exception as e:
         print(f"⚠️ Heartbeat read error: {e}")
         return None
+
+def save_status_message_id(message_id):
+    """حفظ message ID الرسالة الثابتة في الداتابيز"""
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=unquote(parsed.password),
+            sslmode='prefer',
+            connect_timeout=10
+        )
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE bot_heartbeat SET status_message_id = %s WHERE id = 1
+        """, (str(message_id),))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ Save message ID error: {e}")
 
 # ========== باقي الدوال ==========
 
