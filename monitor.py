@@ -12,7 +12,7 @@ from config_encrypted import get_critical_webhook
 CRITICAL_WEBHOOK = get_critical_webhook()
 
 # ========== إعدادات ==========
-HEARTBEAT_TIMEOUT = 180       # ثانية
+HEARTBEAT_TIMEOUT = 90       # ثانية
 TRAINER_TIMEOUT   = 180      # ثانية — التدريب يأخذ وقت أطول
 
 # حالة البوت الرئيسي
@@ -144,6 +144,7 @@ def update_bot_status():
         # استرجاع message ID من الداتابيز لو ما عندنا
         if _status_message_id is None and row.get('status_message_id'):
             _status_message_id = row['status_message_id']
+            _current_status    = new_status  # مهم — بدونه يعتقد الحالة تغيرت
             print(f"✅ Restored message ID: {_status_message_id}")
 
     # أول مرة — أرسل رسالة جديدة
@@ -268,6 +269,7 @@ def update_trainer_status():
 
         if _trainer_message_id is None and row.get('status_message_id'):
             _trainer_message_id = row['status_message_id']
+            _trainer_status     = new_status  # مهم — بدونه يعتقد الحالة تغيرت
             print(f"✅ Restored trainer message ID: {_trainer_message_id}")
 
     if _trainer_message_id is None:
