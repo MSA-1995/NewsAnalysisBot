@@ -1,206 +1,271 @@
 """
-📰 News Analysis Bot - Database Manager
-Database connection and operations
+📰 News Analysis Bot
+Main entry point - imports all modules and starts the bot
 """
 
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
+# Import all modules
+import discord
+import asyncio
+import feedparser
 from datetime import datetime
-from config import DATABASE_URL, CRITICAL_WEBHOOK
-import requests
+from utils import check_pip_update, load_env_file
+from config_encrypted import get_discord_token
+from discord_bot import bot
+from discord.ext import tasks
 
-# Database Connection Pool
-_db_conn = None
-_db_params = None
+# Load environment and check pip
+check_pip_update()
+load_env_file()
 
-def send_critical_alert(error_type, message, details=None):
-    """Send critical error alert to Discord"""
-    if not CRITICAL_WEBHOOK:
-        return
+# Get Discord token
+TOKEN = get_discord_token()
+
+if not TOKEN:
+    print("❌ Error: Failed to decrypt DISCORD_TOKEN!")
+    exit(1)
+
+# Import remaining modules
+from config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, SYMBOLS
+from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_news, processed_news
+from database import get_db_connection, create_table, save_news
+from sentiment import analyze_sentiment
+from scheduler import check_rss_feeds, cleanup_old_news
+
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} is online!")
+    print(f"📊 Connected to {len(bot.guilds)} server(s)")
+    print("📰 News Analysis System: ACTIVE")
     
-    fields = [
-        {"name": "Bot", "value": "News Bot", "inline": True},
-        {"name": "Error Type", "value": error_type, "inline": True},
-        {"name": "Timestamp", "value": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "inline": True},
-        {"name": "Message", "value": message, "inline": False}
-    ]
-    
-    if details:
-        fields.append({"name": "Details", "value": str(details)[:1000], "inline": False})
-    
-    embed = {
-        "title": "🚨 CRITICAL ALERT",
-        "color": 0xff0000,
-        "fields": fields,
-        "footer": {"text": "MSA News Bot • System Alerts"},
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    
+    # Test database connection
     try:
-        requests.post(CRITICAL_WEBHOOK, json={"embeds": [embed]}, timeout=5)
-    except:
-        pass
-
-def init_db_params():
-    """تهيئة معاملات الاتصال"""
-    global _db_params
-    if _db_params:
-        return
-    
-    from urllib.parse import urlparse, unquote
-    parsed = urlparse(DATABASE_URL)
-    
-    _db_params = {
-        'host': parsed.hostname,
-        'port': parsed.port,
-        'database': parsed.path[1:],
-        'user': parsed.username,
-        'password': unquote(parsed.password),
-        'sslmode': 'require',
-        'connect_timeout': 10,
-        'keepalives': 1,
-        'keepalives_idle': 30,
-        'keepalives_interval': 10,
-        'keepalives_count': 5
-    }
-
-def get_db_connection():
-    """الاتصال بقاعدة البيانات مع إعادة استخدام"""
-    global _db_conn, _db_params
-    
-    try:
-        init_db_params()
-        
-        # فحص الاتصال الحالي
-        if _db_conn and not _db_conn.closed:
-            try:
-                # اختبار الاتصال
-                cursor = _db_conn.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
-                return _db_conn
-            except:
-                # الاتصال معطل - نغلقه
-                try:
-                    _db_conn.close()
-                except:
-                    pass
-                _db_conn = None
-        
-        # إنشاء اتصال جديد
-        _db_conn = psycopg2.connect(**_db_params)
-        return _db_conn
-        
-    except Exception as e:
-        print(f"❌ Database connection error: {e}")
-        send_critical_alert("Database Connection", "Failed to connect to database", str(e))
-        return None
-
-# Create news_sentiment table
-def create_table():
-    """إنشاء جدول الأخبار مع retry"""
-    for attempt in range(3):
-        try:
-            conn = get_db_connection()
-            if not conn:
-                if attempt < 2:
-                    import time
-                    time.sleep(2)
-                    continue
-                return
-            
+        conn = get_db_connection()
+        if conn:
             cursor = conn.cursor()
-            
-            # إنشاء الجدول إذا ما كان موجود
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS news_sentiment (
-                    id SERIAL PRIMARY KEY,
-                    symbol VARCHAR(20),
-                    sentiment VARCHAR(20),
-                    score FLOAT,
-                    headline TEXT,
-                    source VARCHAR(200),
-                    channel_id BIGINT,
-                    timestamp TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            
-            conn.commit()
+            cursor.execute("SELECT 1")
             cursor.close()
-            conn.close()
-            print("✅ news_sentiment table ready")
-            return
-        except Exception as e:
-            print(f"❌ Table creation error (attempt {attempt+1}/3): {e}")
-            if attempt == 2:
-                send_critical_alert("Database Table Error", "Failed to create news_sentiment table", str(e))
-            try:
-                if conn:
-                    conn.close()
-            except:
-                pass
-            
-            if attempt < 2:
-                import time
-                time.sleep(2)
-
-# Save news to database
-def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
-    """حفظ الخبر في قاعدة البيانات مع إعادة محاولة"""
-    global _db_conn
+            print("✅ Database: Connected (Supabase)")
+        else:
+            print("❌ Database: Connection failed")
+    except Exception as e:
+        print(f"❌ Database: Connection error - {e}")
     
-    for attempt in range(retry):
-        conn = None
-        try:
-            # إنشاء اتصال جديد مباشرة (بدون إعادة استخدام)
-            from urllib.parse import urlparse, unquote
-            parsed = urlparse(DATABASE_URL)
-            
-            conn = psycopg2.connect(
-                host=parsed.hostname,
-                port=parsed.port,
-                database=parsed.path[1:],
-                user=parsed.username,
-                password=unquote(parsed.password),
-                sslmode='prefer',  # prefer بدلاً من require
-                connect_timeout=15,
-                keepalives=1,
-                keepalives_idle=30,
-                keepalives_interval=10,
-                keepalives_count=5
+    # Create table
+    create_table()
+    
+    # Auto-create news channel if not exists
+    for guild in bot.guilds:
+        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+        if not news_channel:
+            try:
+                news_channel = await guild.create_text_channel(
+                    name="news-analysis-bot",
+                    topic="📰 Crypto News Analysis - Automated RSS Feeds",
+                    reason="Auto-setup by News Analysis Bot"
+                )
+                
+                # Welcome message
+                welcome_embed = discord.Embed(
+                    title="News Analysis Bot",
+                    description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\nالمصادر:\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\nالتحديث: كل 30 دقيقة\nالتحليل: Sentiment Analysis",
+                    color=0x00ff00
+                )
+                welcome_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+                welcome_embed.set_footer(text="News Analysis Bot • MSA")
+                await news_channel.send(embed=welcome_embed)
+                
+                print(f"✅ Auto-created news channel in {guild.name}")
+            except Exception as e:
+                print(f"⚠️ Could not create channel in {guild.name}: {e}")
+        else:
+            print(f"✅ News channel exists in {guild.name}")
+    
+    # Start RSS feed checker
+    if not check_rss_feeds.is_running():
+        check_rss_feeds.start()
+        print("🔄 RSS Feed Checker: STARTED")
+    
+    # Start auto-cleanup
+    if not cleanup_old_news.is_running():
+        cleanup_old_news.start()
+        print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
+
+@bot.event
+async def on_message(message):
+    # Ignore bot messages
+    if message.author.bot:
+        return
+    
+    # Only process messages in news-analysis-bot channel
+    if message.channel.name != "news-analysis-bot":
+        await bot.process_commands(message)
+        return
+    
+    # Analyze messages only in news channel
+    from discord_bot import extract_symbols
+    symbols = extract_symbols(message.content)
+    
+    if symbols:
+        sentiment, score = analyze_sentiment(message.content)
+        
+        for symbol in symbols:
+            saved = save_news(
+                symbol=symbol,
+                sentiment=sentiment,
+                score=score,
+                headline=message.content,
+                source='Discord',
+                channel_id=message.channel.id
             )
             
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO news_sentiment 
-                (symbol, sentiment, score, headline, source, channel_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (symbol, sentiment, score, headline[:500], source[:200], channel_id))
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"❌ Save news error (attempt {attempt+1}/{retry}): {e}")
-            try:
-                if conn:
-                    conn.rollback()
-                    conn.close()
-            except:
-                pass
-            
-            if attempt < retry - 1:
-                import time
-                time.sleep(3)  # زيادة الانتظار من 2 إلى 3 ثواني
-            else:
-                return False
+            if saved:
+                print(f"📰 News saved: {symbol} | {sentiment} ({score:.2f}) | {message.channel.name}")
+                
+                # Send notification in same channel
+                embed = discord.Embed(
+                    title=f"News Detected: {symbol}",
+                    description=message.content[:500],
+                    color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                    timestamp=datetime.now()
+                )
+                embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+                embed.add_field(name="Source", value=f"#{message.channel.name}", inline=True)
+                embed.set_thumbnail(url=message.guild.icon.url if message.guild.icon else None)
+                embed.set_footer(text="News Analysis Bot • MSA")
+                
+                try:
+                    await message.channel.send(embed=embed)
+                except:
+                    pass
     
-    return False
+    await bot.process_commands(message)
+
+# RSS Feed Checker
+@tasks.loop(minutes=30)
+async def check_rss_feeds():
+    """فحص RSS Feeds + Free APIs كل 30 دقيقة"""
+    print("🔍 Checking RSS feeds + Free APIs...")
+    
+    # 1. RSS Feeds (الموجودة)
+    for feed_url in RSS_FEEDS:
+        try:
+            feed = feedparser.parse(feed_url)
+            
+            for entry in feed.entries[:5]:  # أحدث 5 أخبار
+                # تجنب التكرار
+                news_id = entry.get('id', entry.get('link', ''))
+                if news_id in processed_news:
+                    continue
+                
+                processed_news.add(news_id)
+                
+                # استخراج العنوان والوصف
+                title = entry.get('title', '')
+                description = entry.get('summary', entry.get('description', ''))
+                full_text = f"{title} {description}"
+                
+                # استخراج العملات
+                from discord_bot import extract_symbols
+                symbols = extract_symbols(full_text)
+                
+                if symbols:
+                    # تحليل Sentiment
+                    sentiment, score = analyze_sentiment(full_text)
+                    
+                    for symbol in symbols:
+                        # حفظ في Database
+                        saved = save_news(
+                            symbol=symbol,
+                            sentiment=sentiment,
+                            score=score,
+                            headline=title,
+                            source=feed.feed.get('title', 'RSS'),
+                            channel_id=0
+                        )
+                        
+                        if saved:
+                            print(f"📰 RSS News: {symbol} | {sentiment} ({score:.2f})")
+                            
+                            # إرسال في news-analysis-bot
+                            for guild in bot.guilds:
+                                news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+                                if news_channel:
+                                    embed = discord.Embed(
+                                        title=f"{symbol} News",
+                                        description=title[:500],
+                                        color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                                        timestamp=datetime.now(),
+                                        url=entry.get('link', '')
+                                    )
+                                    embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+                                    embed.add_field(name="Source", value=feed.feed.get('title', 'RSS'), inline=True)
+                                    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+                                    embed.set_footer(text="News Analysis Bot • MSA")
+                                    
+                                    try:
+                                        await news_channel.send(embed=embed)
+                                        await asyncio.sleep(2)  # تجنب Rate Limit
+                                    except Exception as e:
+                                        print(f"⚠️ Send error: {e}")
+            
+            await asyncio.sleep(5)  # بين كل Feed
+            
+        except Exception as e:
+            print(f"❌ RSS Feed error ({feed_url}): {e}")
+    
+    # 2. Free APIs (CryptoPanic + Reddit + CoinGecko)
+    print("🔍 Checking Free APIs...")
+    
+    # العملات المدعومة
+    supported_coins = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT', 'MATIC/USDT', 'AVAX/USDT', 'LINK/USDT']
+    
+    for symbol in supported_coins:
+        try:
+            # CryptoPanic
+            cp_news = get_cryptopanic_news(symbol)
+            for news_item in cp_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 CryptoPanic: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(2)
+            
+            # Reddit
+            reddit_news = get_reddit_news(symbol)
+            for news_item in reddit_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 Reddit: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(2)
+            
+            # CoinGecko
+            cg_news = get_coingecko_news(symbol)
+            for news_item in cg_news:
+                sentiment, score = analyze_sentiment(news_item['title'])
+                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                if saved:
+                    print(f"📰 CoinGecko: {symbol} | {sentiment}")
+                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
+            
+            await asyncio.sleep(3)
+            
+        except Exception as e:
+            print(f"⚠️ Free API error for {symbol}: {e}")
+    
+    # تنظيف processed_news (الاحتفاظ بآخر 1000)
+    if len(processed_news) > 1000:
+        processed_news.clear()
+    
+    print("✅ RSS + Free APIs check completed")
 
 # Auto-cleanup old news
-def cleanup_old_news():
+@tasks.loop(hours=1)
+async def cleanup_old_news():
     """حذف الأخبار الأقدم من 24 ساعة كل ساعة"""
     try:
         conn = get_db_connection()
@@ -223,57 +288,54 @@ def cleanup_old_news():
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
 
-# Get news stats
-def get_news_stats():
-    """Get news statistics"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return None
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as total,
-                COUNT(CASE WHEN sentiment = 'POSITIVE' THEN 1 END) as positive,
-                COUNT(CASE WHEN sentiment = 'NEGATIVE' THEN 1 END) as negative,
-                COUNT(CASE WHEN sentiment = 'NEUTRAL' THEN 1 END) as neutral
-            FROM news_sentiment
-            WHERE timestamp > NOW() - INTERVAL '24 hours'
-        """)
-        
-        stats = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        return stats
-    except Exception as e:
-        print(f"⚠️ Stats error: {e}")
-        return None
+@cleanup_old_news.before_loop
+async def before_cleanup():
+    await bot.wait_until_ready()
 
-# Get coin sentiment
-def get_coin_sentiment(symbol):
-    """Get sentiment for specific coin"""
-    try:
-        conn = get_db_connection()
-        if not conn:
-            return None
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
-            SELECT sentiment, score, headline, timestamp
-            FROM news_sentiment
-            WHERE symbol = %s
-            AND timestamp > NOW() - INTERVAL '24 hours'
-            ORDER BY timestamp DESC
-            LIMIT 5
-        """, (symbol,))
-        
-        news = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        return news
-    except Exception as e:
-        print(f"⚠️ Coin sentiment error: {e}")
-        return None
+# Helper function to send news
+async def send_news_to_channels(symbol, title, sentiment, score, source, url):
+    """إرسال الخبر لجميع السيرفرات"""
+    for guild in bot.guilds:
+        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+        if news_channel:
+            embed = discord.Embed(
+                title=f"{symbol} News",
+                description=title[:500],
+                color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                timestamp=datetime.now(),
+                url=url if url else None
+            )
+            embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+            embed.add_field(name="Source", value=source, inline=True)
+            embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+            embed.set_footer(text="News Analysis Bot • MSA")
+            try:
+                await news_channel.send(embed=embed)
+                await asyncio.sleep(1)
+            except:
+                pass
+
+@check_rss_feeds.before_loop
+async def before_check_rss():
+    await bot.wait_until_ready()
+
+
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    # تجاهل أخطاء الأوامر غير الموجودة
+    if isinstance(error, commands.CommandNotFound):
+        return
+    
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You need Administrator permissions to use this command!", delete_after=5)
+
+print("🚀 Starting News Analysis Bot...")
+try:
+    bot.run(TOKEN)
+except Exception as e:
+    print(f"❌ Bot crashed: {e}")
+    from utils import send_critical_alert
+    send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
+
