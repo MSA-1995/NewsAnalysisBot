@@ -30,6 +30,7 @@ from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_ne
 from database import get_db_connection, create_table, save_news
 from sentiment import analyze_sentiment
 from scheduler import check_rss_feeds, cleanup_old_news
+from monitor import update_bot_status
 
 @bot.event
 async def on_ready():
@@ -89,6 +90,20 @@ async def on_ready():
     if not cleanup_old_news.is_running():
         cleanup_old_news.start()
         print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
+
+    # Start trading bot monitor
+    if not check_trading_bot.is_running():
+        check_trading_bot.start()
+        print("👁️ Trading Bot Monitor: STARTED")
+
+@tasks.loop(seconds=10)
+async def check_trading_bot():
+    """مراقبة البوت الرئيسي كل 10 ثواني"""
+    update_bot_status()
+
+@check_trading_bot.before_loop
+async def before_monitor():
+    await bot.wait_until_ready()
 
 @bot.event
 async def on_message(message):
