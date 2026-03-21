@@ -207,7 +207,7 @@ def save_status_message_id(message_id):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE bot_heartbeat SET status_message_id = %s WHERE id = 1
-        """, (str(message_id),))
+        """, (str(message_id) if message_id else None,))
         conn.commit()
         cursor.close()
         conn.close()
