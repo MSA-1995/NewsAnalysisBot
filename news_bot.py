@@ -93,6 +93,12 @@ async def on_ready():
 
     # Start trading bot monitor
     if not check_trading_bot.is_running():
+        # تمرير صورة السيرفر
+        from monitor import set_server_icon
+        for guild in bot.guilds:
+            if guild.icon:
+                set_server_icon(str(guild.icon.url))
+                break
         check_trading_bot.start()
         print("👁️ Trading Bot Monitor: STARTED")
 
