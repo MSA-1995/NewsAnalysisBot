@@ -72,23 +72,19 @@ def get_db_connection():
     try:
         init_db_params()
         
-        # فحص الاتصال الحالي
         if _db_conn and not _db_conn.closed:
             try:
-                # اختبار الاتصال
                 cursor = _db_conn.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
                 return _db_conn
             except:
-                # الاتصال معطل - نغلقه
                 try:
                     _db_conn.close()
                 except:
                     pass
                 _db_conn = None
         
-        # إنشاء اتصال جديد
         _db_conn = psycopg2.connect(**_db_params)
         return _db_conn
         
@@ -97,9 +93,8 @@ def get_db_connection():
         send_critical_alert("Database Connection", "Failed to connect to database", str(e))
         return None
 
-# Create news_sentiment table
 def create_table():
-    """إنشاء جدول الأخبار مع retry"""
+    """إنشاء جداول الأخبار و Heartbeat"""
     for attempt in range(3):
         try:
             conn = get_db_connection()
@@ -112,7 +107,7 @@ def create_table():
             
             cursor = conn.cursor()
             
-            # إنشاء الجدول إذا ما كان موجود
+            # جدول الأخبار
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS news_sentiment (
                     id SERIAL PRIMARY KEY,
@@ -126,15 +121,32 @@ def create_table():
                 )
             """)
             
+            # ========== جدول Heartbeat للبوت الرئيسي ==========
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS bot_heartbeat (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    last_beat TIMESTAMP DEFAULT NOW(),
+                    status VARCHAR(20) DEFAULT 'ONLINE'
+                )
+            """)
+            
+            # إدخال صف واحد ثابت إذا ما كان موجود
+            cursor.execute("""
+                INSERT INTO bot_heartbeat (id, last_beat, status)
+                VALUES (1, NOW(), 'ONLINE')
+                ON CONFLICT (id) DO NOTHING
+            """)
+            
             conn.commit()
             cursor.close()
             conn.close()
             print("✅ news_sentiment table ready")
+            print("✅ bot_heartbeat table ready")
             return
         except Exception as e:
             print(f"❌ Table creation error (attempt {attempt+1}/3): {e}")
             if attempt == 2:
-                send_critical_alert("Database Table Error", "Failed to create news_sentiment table", str(e))
+                send_critical_alert("Database Table Error", "Failed to create tables", str(e))
             try:
                 if conn:
                     conn.close()
@@ -145,7 +157,34 @@ def create_table():
                 import time
                 time.sleep(2)
 
-# Save news to database
+# ========== Heartbeat Functions ==========
+
+def get_trading_bot_status():
+    """قراءة حالة البوت من الداتابيز"""
+    try:
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=unquote(parsed.password),
+            sslmode='prefer',
+            connect_timeout=10
+        )
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT last_beat, status FROM bot_heartbeat WHERE id = 1")
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row
+    except Exception as e:
+        print(f"⚠️ Heartbeat read error: {e}")
+        return None
+
+# ========== باقي الدوال ==========
+
 def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
     """حفظ الخبر في قاعدة البيانات مع إعادة محاولة"""
     global _db_conn
@@ -153,7 +192,6 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
     for attempt in range(retry):
         conn = None
         try:
-            # إنشاء اتصال جديد مباشرة (بدون إعادة استخدام)
             from urllib.parse import urlparse, unquote
             parsed = urlparse(DATABASE_URL)
             
@@ -163,7 +201,7 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
                 database=parsed.path[1:],
                 user=parsed.username,
                 password=unquote(parsed.password),
-                sslmode='prefer',  # prefer بدلاً من require
+                sslmode='prefer',
                 connect_timeout=15,
                 keepalives=1,
                 keepalives_idle=30,
@@ -193,15 +231,14 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
             
             if attempt < retry - 1:
                 import time
-                time.sleep(3)  # زيادة الانتظار من 2 إلى 3 ثواني
+                time.sleep(3)
             else:
                 return False
     
     return False
 
-# Auto-cleanup old news
 def cleanup_old_news():
-    """حذف الأخبار الأقدم من 24 ساعة كل ساعة"""
+    """حذف الأخبار الأقدم من 24 ساعة"""
     try:
         conn = get_db_connection()
         if not conn:
@@ -223,7 +260,6 @@ def cleanup_old_news():
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
 
-# Get news stats
 def get_news_stats():
     """Get news statistics"""
     try:
@@ -251,7 +287,6 @@ def get_news_stats():
         print(f"⚠️ Stats error: {e}")
         return None
 
-# Get coin sentiment
 def get_coin_sentiment(symbol):
     """Get sentiment for specific coin"""
     try:
