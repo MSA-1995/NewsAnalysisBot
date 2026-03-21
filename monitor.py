@@ -2,12 +2,18 @@
 👁️ Trading Bot Monitor
 يراقب نبضة البوت الرئيسي ويغير الحالة في الديسكورد
 يشتغل داخل بوت الأخبار
+الآن يستخدم Health Check بدلاً من قاعدة البيانات
 """
 
 import requests
 from datetime import datetime, timezone
 from database import get_trading_bot_status, save_status_message_id, get_trainer_status, save_trainer_message_id
 from config_encrypted import get_critical_webhook
+from health_monitor import (
+    get_trading_bot_health_status, 
+    get_trainer_health_status,
+    check_bots_health
+)
 
 CRITICAL_WEBHOOK = get_critical_webhook()
 
@@ -125,26 +131,19 @@ def _build_embed(status):
 
 
 def update_bot_status():
-    """الدالة الرئيسية — تُستدعى كل 10 ثواني من بوت الأخبار"""
+    """الدالة الرئيسية — تُستدعى كل 10 ثواني من بوت الأخبار
+    الآن تستخدم Health Check بدلاً من قاعدة البيانات"""
     global _current_status, _status_message_id
 
-    row = get_trading_bot_status()
-
-    if not row:
-        new_status = 'OFFLINE'
-    else:
-        # الداتابيز تحسب الفرق بتوقيتها الموحد — بدون أي فرق بين سيرفرين
-        seconds_since = float(row.get('seconds_since') or 9999)
-
-        if seconds_since <= HEARTBEAT_TIMEOUT:
-            new_status = 'ONLINE'
-        else:
-            new_status = 'OFFLINE'
-
-        # استرجاع message ID من الداتابيز لو ما عندنا
-        if _status_message_id is None and row.get('status_message_id'):
+    # استخدام Health Check للحصول على الحالة
+    new_status = get_trading_bot_health_status()
+    
+    # استرجاع message ID من الداتابيز لو ما عندنا
+    if _status_message_id is None:
+        row = get_trading_bot_status()
+        if row and row.get('status_message_id'):
             _status_message_id = row['status_message_id']
-            _current_status    = new_status  # مهم — بدونه يعتقد الحالة تغيرت
+            _current_status = new_status
             print(f"✅ Restored message ID: {_status_message_id}")
 
     # أول مرة — أرسل رسالة جديدة
@@ -155,7 +154,7 @@ def update_bot_status():
 
     # لو الحالة تغيرت — عدّل الرسالة
     if new_status != _current_status:
-        print(f"🔄 Status changed: {_current_status} → {new_status}")
+        print(f"🔄 Trading Bot status changed: {_current_status} → {new_status}")
         _current_status = new_status
         _edit_status_message(new_status)
     else:
@@ -256,20 +255,19 @@ def _build_trainer_embed(status):
 
 
 def update_trainer_status():
-    """مراقبة سكريبت التدريب — تُستدعى كل 30 ثانية"""
+    """مراقبة سكريبت التدريب — تُستدعى كل 30 ثانية
+    الآن تستخدم Health Check بدلاً من قاعدة البيانات"""
     global _trainer_status, _trainer_message_id
 
-    row = get_trainer_status()
-
-    if not row:
-        new_status = 'OFFLINE'
-    else:
-        seconds_since = float(row.get('seconds_since') or 9999)
-        new_status    = 'ONLINE' if seconds_since <= TRAINER_TIMEOUT else 'OFFLINE'
-
-        if _trainer_message_id is None and row.get('status_message_id'):
+    # استخدام Health Check للحصول على الحالة
+    new_status = get_trainer_health_status()
+    
+    # استرجاع message ID من الداتابيز لو ما عندنا
+    if _trainer_message_id is None:
+        row = get_trainer_status()
+        if row and row.get('status_message_id'):
             _trainer_message_id = row['status_message_id']
-            _trainer_status     = new_status  # مهم — بدونه يعتقد الحالة تغيرت
+            _trainer_status = new_status
             print(f"✅ Restored trainer message ID: {_trainer_message_id}")
 
     if _trainer_message_id is None:
