@@ -30,8 +30,6 @@ from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_ne
 from database import get_db_connection, create_table, save_news
 from sentiment import analyze_sentiment
 from scheduler import check_rss_feeds, cleanup_old_news
-from monitor import update_bot_status, update_trainer_status
-from health_monitor import check_bots_health_async, get_trading_bot_health_status, get_trainer_health_status
 
 @bot.event
 async def on_ready():
@@ -91,58 +89,6 @@ async def on_ready():
     if not cleanup_old_news.is_running():
         cleanup_old_news.start()
         print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
-
-    # Start trading bot monitor
-    if not check_trading_bot.is_running():
-        from monitor import set_server_icon
-        for guild in bot.guilds:
-            if guild.icon:
-                set_server_icon(str(guild.icon.url))
-                break
-        check_trading_bot.start()
-        print("👁️ Trading Bot Monitor: STARTED")
-
-    # Start trainer monitor
-    if not check_trainer_bot.is_running():
-        check_trainer_bot.start()
-        print("👁️ Trainer Bot Monitor: STARTED")
-
-    # Start health check monitor
-    if not health_check_monitor.is_running():
-        health_check_monitor.start()
-        print("🏥 Health Check Monitor: STARTED")
-
-@tasks.loop(seconds=10)
-async def check_trading_bot():
-    """مراقبة البوت الرئيسي كل 10 ثواني"""
-    update_bot_status()
-
-@tasks.loop(seconds=30)
-async def check_trainer_bot():
-    """مراقبة سكريبت التدريب كل 30 ثانية"""
-    update_trainer_status()
-
-@check_trading_bot.before_loop
-async def before_monitor():
-    await bot.wait_until_ready()
-
-@check_trainer_bot.before_loop
-async def before_trainer_monitor():
-    await bot.wait_until_ready()
-
-# Health Check Monitor Task
-@tasks.loop(seconds=30)
-async def health_check_monitor():
-    """فحص حالة البوتات الأخرى باستخدام Health Check"""
-    try:
-        await check_bots_health_async()
-        print(f"🏥 Health check completed: Trading={get_trading_bot_health_status()}, Trainer={get_trainer_health_status()}")
-    except Exception as e:
-        print(f"❌ Health check error: {e}")
-
-@health_check_monitor.before_loop
-async def before_health_check():
-    await bot.wait_until_ready()
 
 @bot.event
 async def on_message(message):
