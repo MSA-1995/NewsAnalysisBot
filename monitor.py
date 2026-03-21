@@ -12,8 +12,8 @@ from config_encrypted import get_critical_webhook
 CRITICAL_WEBHOOK = get_critical_webhook()
 
 # ========== إعدادات ==========
-HEARTBEAT_TIMEOUT = 90      # ثانية — لو ما في نبضة خلال 120 ثانية = أوفلاين
-CHECK_INTERVAL_SECONDS = 30  # كل 10 ثواني يفحص
+HEARTBEAT_TIMEOUT = 120      # ثانية — لو ما في نبضة خلال 120 ثانية = أوفلاين
+CHECK_INTERVAL_SECONDS = 10  # كل 10 ثواني يفحص
 
 # حالة الرسالة الثابتة
 _status_message_id = None
@@ -50,13 +50,12 @@ def _send_status_message(status):
 
 
 def _edit_status_message(status):
-    """تعديل نفس الرسالة بدون إرسال رسالة جديدة"""
+    """تعديل نفس الرسالة — لو فشل يرسل جديدة"""
     global _status_message_id
 
     if not CRITICAL_WEBHOOK or not _status_message_id:
         return
 
-    # استخراج webhook id و token من الرابط
     try:
         parts = CRITICAL_WEBHOOK.rstrip('/').split('/')
         webhook_id = parts[-2]
@@ -68,7 +67,13 @@ def _edit_status_message(status):
     edit_url = f"https://discord.com/api/webhooks/{webhook_id}/{webhook_token}/messages/{_status_message_id}"
 
     try:
-        requests.patch(edit_url, json={"embeds": [embed]}, timeout=5)
+        r = requests.patch(edit_url, json={"embeds": [embed]}, timeout=5)
+        # لو الرسالة محذوفة — يرسل جديدة
+        if r.status_code == 404:
+            print("⚠️ Status message deleted — sending new one")
+            _status_message_id = None
+            save_status_message_id(None)
+            _send_status_message(status)
     except Exception as e:
         print(f"⚠️ Edit status error: {e}")
 
