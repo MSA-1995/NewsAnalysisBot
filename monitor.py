@@ -12,7 +12,7 @@ from config_encrypted import get_critical_webhook
 CRITICAL_WEBHOOK = get_critical_webhook()
 
 # ========== إعدادات ==========
-HEARTBEAT_TIMEOUT = 30       # ثانية — لو ما في نبضة خلال 30 ثانية = أوفلاين
+HEARTBEAT_TIMEOUT = 120      # ثانية — لو ما في نبضة خلال 120 ثانية = أوفلاين
 CHECK_INTERVAL_SECONDS = 10  # كل 10 ثواني يفحص
 
 # حالة الرسالة الثابتة
@@ -72,21 +72,23 @@ def _build_embed(status):
 
     if status == 'ONLINE':
         return {
-            "title": "🟢 Trading Bot — ONLINE",
+            "title": "🟢  Trading Bot — ONLINE",
             "color": 0x00ff00,
+            "description": "─────────────────────────────",
             "fields": [
-                {"name": "الحالة", "value": "✅ يعمل بشكل طبيعي", "inline": True},
-                {"name": "آخر تحديث", "value": now, "inline": True}
+                {"name": "🖥️ الحالة", "value": "متصل", "inline": True},
+                {"name": "🕐 آخر تحديث", "value": now, "inline": True},
             ],
             "footer": {"text": "MSA Trading Bot • System Monitor"}
         }
     else:
         return {
-            "title": "🔴 Trading Bot — OFFLINE",
+            "title": "🔴  Trading Bot — OFFLINE",
             "color": 0xff0000,
+            "description": "─────────────────────────────",
             "fields": [
-                {"name": "الحالة", "value": "❌ البوت متوقف أو انقطع", "inline": True},
-                {"name": "آخر تحديث", "value": now, "inline": True}
+                {"name": "🖥️ الحالة", "value": "غير متصل", "inline": True},
+                {"name": "🕐 آخر تحديث", "value": now, "inline": True},
             ],
             "footer": {"text": "MSA Trading Bot • System Monitor"}
         }
@@ -103,12 +105,12 @@ def update_bot_status():
     else:
         last_beat = row['last_beat']
 
-        # تحويل الوقت لـ timezone-aware
-        if last_beat.tzinfo is None:
-            last_beat = last_beat.replace(tzinfo=timezone.utc)
+        # توحيد التوقيت — كلهم UTC naive
+        if last_beat.tzinfo is not None:
+            last_beat = last_beat.replace(tzinfo=None)
 
-        now_utc = datetime.now(timezone.utc)
-        seconds_since = (now_utc - last_beat).total_seconds()
+        now_utc = datetime.utcnow()
+        seconds_since = abs((now_utc - last_beat).total_seconds())
 
         if seconds_since <= HEARTBEAT_TIMEOUT:
             new_status = 'ONLINE'
