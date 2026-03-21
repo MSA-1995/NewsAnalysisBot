@@ -30,23 +30,3 @@ async def cleanup_old_news_task():
 async def before_cleanup():
     from discord_bot import bot
     await bot.wait_until_ready()
-
-# Health Check Monitor
-@tasks.loop(seconds=30)
-async def health_check_task():
-    """فحص حالة البوتات الأخرى كل 30 ثانية باستخدام Health Check"""
-    try:
-        # تشغيل فحص الـ Health Check
-        await check_bots_health_async()
-        
-        # تحديث حالة البوتات في الديسكورد
-        update_bot_status()
-        update_trainer_status()
-        
-    except Exception as e:
-        print(f"❌ Health check error: {e}")
-
-@health_check_task.before_loop
-async def before_health_check():
-    from discord_bot import bot
-    await bot.wait_until_ready()
