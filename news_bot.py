@@ -11,7 +11,7 @@ from datetime import datetime
 from utils import check_pip_update, load_env_file
 from config_encrypted import get_discord_token
 from discord_bot import bot
-from discord.ext import tasks
+from discord.ext import commands, tasks
 
 # Load environment and check pip
 check_pip_update()
@@ -338,4 +338,3 @@ except Exception as e:
     print(f"❌ Bot crashed: {e}")
     from utils import send_critical_alert
     send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
-
