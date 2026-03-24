@@ -1,12 +1,11 @@
 """
-📰 News Analysis Bot
-Main entry point - imports all modules and starts the bot
+📰 News Analysis Bot - Enhanced Version with Rate Limiting
 """
 
-# Import all modules
 import discord
 import asyncio
 import feedparser
+import aiohttp
 from datetime import datetime
 from utils import check_pip_update, load_env_file
 from config_encrypted import get_discord_token
@@ -29,8 +28,76 @@ from config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, 
 from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_news, processed_news
 from database import get_db_connection, create_table, save_news
 from sentiment import analyze_sentiment
-from scheduler import check_rss_feeds, cleanup_old_news
+from scheduler import cleanup_old_news
 
+# ========================= RATE LIMITER =========================
+class RateLimiter:
+    """Simple async rate limiter"""
+    def __init__(self, max_calls: int, period: float):
+        self.max_calls = max_calls
+        self.period = period
+        self.calls = 0
+        self.lock = asyncio.Lock()
+        self.queue = asyncio.Queue()
+        asyncio.create_task(self._worker())
+
+    async def _worker(self):
+        while True:
+            func, args, kwargs, fut = await self.queue.get()
+            async with self.lock:
+                if self.calls >= self.max_calls:
+                    await asyncio.sleep(self.period)
+                    self.calls = 0
+                try:
+                    result = await func(*args, **kwargs)
+                    fut.set_result(result)
+                except Exception as e:
+                    fut.set_exception(e)
+                self.calls += 1
+            self.queue.task_done()
+
+    async def call(self, func, *args, **kwargs):
+        fut = asyncio.get_event_loop().create_future()
+        await self.queue.put((func, args, kwargs, fut))
+        return await fut
+
+# RateLimiters: 1 request per 1.5 sec for APIs, 1 msg/sec for Discord
+api_rate_limiter = RateLimiter(max_calls=1, period=1.5)
+discord_rate_limiter = RateLimiter(max_calls=1, period=1.0)
+
+# ========================= HELPER FUNCTIONS =========================
+async def send_discord_message(channel, embed):
+    """Send a Discord embed safely with rate limiting"""
+    async def _send():
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException as e:
+            if e.status == 429:
+                print("⚠️ Discord 429: waiting before retry")
+                await asyncio.sleep(5)
+                await channel.send(embed=embed)
+    await discord_rate_limiter.call(_send)
+
+async def send_news_to_channels(symbol, title, sentiment, score, source, url):
+    """Send news to all guilds using queue"""
+    for guild in bot.guilds:
+        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
+        if news_channel:
+            embed = discord.Embed(
+                title=f"{symbol} News",
+                description=title[:500],
+                color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
+                timestamp=datetime.now(),
+                url=url if url else None
+            )
+            embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
+            embed.add_field(name="Source", value=source, inline=True)
+            embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+            embed.set_footer(text="News Analysis Bot • MSA")
+            await send_discord_message(news_channel, embed)
+            await asyncio.sleep(0.5)  # extra safety delay
+
+# ========================= BOT EVENTS =========================
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} is online!")
@@ -63,8 +130,6 @@ async def on_ready():
                     topic="📰 Crypto News Analysis - Automated RSS Feeds",
                     reason="Auto-setup by News Analysis Bot"
                 )
-                
-                # Welcome message
                 welcome_embed = discord.Embed(
                     title="News Analysis Bot",
                     description="هذا الروم لعرض أخبار العملات الرقمية تلقائياً\n\nالمصادر:\n- CoinTelegraph\n- CoinDesk\n- CryptoNews\n\nالتحديث: كل 30 دقيقة\nالتحليل: Sentiment Analysis",
@@ -72,14 +137,13 @@ async def on_ready():
                 )
                 welcome_embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
                 welcome_embed.set_footer(text="News Analysis Bot • MSA")
-                await news_channel.send(embed=welcome_embed)
-                
+                await send_discord_message(news_channel, welcome_embed)
                 print(f"✅ Auto-created news channel in {guild.name}")
             except Exception as e:
                 print(f"⚠️ Could not create channel in {guild.name}: {e}")
         else:
             print(f"✅ News channel exists in {guild.name}")
-    
+
     # Start RSS feed checker
     if not check_rss_feeds.is_running():
         check_rss_feeds.start()
@@ -92,22 +156,17 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    # Ignore bot messages
     if message.author.bot:
         return
-    
-    # Only process messages in news-analysis-bot channel
     if message.channel.name != "news-analysis-bot":
         await bot.process_commands(message)
         return
     
-    # Analyze messages only in news channel
     from discord_bot import extract_symbols
     symbols = extract_symbols(message.content)
     
     if symbols:
         sentiment, score = analyze_sentiment(message.content)
-        
         for symbol in symbols:
             saved = save_news(
                 symbol=symbol,
@@ -117,76 +176,37 @@ async def on_message(message):
                 source='Discord',
                 channel_id=message.channel.id
             )
-            
             if saved:
                 print(f"📰 News saved: {symbol} | {sentiment} ({score:.2f}) | {message.channel.name}")
-                
-                # Send notification in same channel
-                embed = discord.Embed(
-                    title=f"News Detected: {symbol}",
-                    description=message.content[:500],
-                    color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
-                    timestamp=datetime.now()
-                )
-                embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
-                embed.add_field(name="Source", value=f"#{message.channel.name}", inline=True)
-                embed.set_thumbnail(url=message.guild.icon.url if message.guild.icon else None)
-                embed.set_footer(text="News Analysis Bot • MSA")
-                
-                try:
-                    await message.channel.send(embed=embed)
-                except:
-                    pass
+                await send_news_to_channels(symbol, message.content, sentiment, score, 'Discord', None)
     
     await bot.process_commands(message)
 
-# RSS Feed Checker
+# ========================= RSS & API CHECKER =========================
 @tasks.loop(minutes=30)
 async def check_rss_feeds():
-    """فحص RSS Feeds + Free APIs كل 30 دقيقة"""
     print("🔍 Checking RSS feeds + Free APIs...")
     
-    # 1. RSS Feeds (الموجودة)
+    # 1. RSS Feeds
     for feed_url in RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_url)
-            
-            for entry in feed.entries[:5]:  # أحدث 5 أخبار
-                # تجنب التكرار
+            for entry in feed.entries[:5]:
                 news_id = entry.get('id', entry.get('link', ''))
                 if news_id in processed_news:
                     continue
-                
                 processed_news.add(news_id)
-                
-                # استخراج العنوان والوصف
                 title = entry.get('title', '')
                 description = entry.get('summary', entry.get('description', ''))
                 full_text = f"{title} {description}"
-                
-                # استخراج العملات
                 from discord_bot import extract_symbols
                 symbols = extract_symbols(full_text)
-                
                 if symbols:
-                    # تحليل Sentiment
                     sentiment, score = analyze_sentiment(full_text)
-                    
                     for symbol in symbols:
-                        # حفظ في Database
-                        saved = save_news(
-                            symbol=symbol,
-                            sentiment=sentiment,
-                            score=score,
-                            headline=title,
-                            source=feed.feed.get('title', 'RSS'),
-                            channel_id=0
-                        )
-                        
+                        saved = save_news(symbol, sentiment, score, title, entry.feed.get('title', 'RSS'), 0)
                         if saved:
                             print(f"📰 RSS News: {symbol} | {sentiment} ({score:.2f})")
-                            
-                            # إرسال في news-analysis-bot
                             for guild in bot.guilds:
                                 news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
                                 if news_channel:
@@ -198,31 +218,20 @@ async def check_rss_feeds():
                                         url=entry.get('link', '')
                                     )
                                     embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
-                                    embed.add_field(name="Source", value=feed.feed.get('title', 'RSS'), inline=True)
+                                    embed.add_field(name="Source", value=entry.feed.get('title', 'RSS'), inline=True)
                                     embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
                                     embed.set_footer(text="News Analysis Bot • MSA")
-                                    
-                                    try:
-                                        await news_channel.send(embed=embed)
-                                        await asyncio.sleep(2)  # تجنب Rate Limit
-                                    except Exception as e:
-                                        print(f"⚠️ Send error: {e}")
-            
-            await asyncio.sleep(5)  # بين كل Feed
-            
+                                    await send_discord_message(news_channel, embed)
+            await asyncio.sleep(5)
         except Exception as e:
             print(f"❌ RSS Feed error ({feed_url}): {e}")
-    
-    # 2. Free APIs (CryptoPanic + Reddit + CoinGecko)
+
+    # 2. Free APIs
     print("🔍 Checking Free APIs...")
-    
-    # العملات المدعومة
     supported_coins = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT', 'MATIC/USDT', 'AVAX/USDT', 'LINK/USDT']
-    
     for symbol in supported_coins:
         try:
-            # CryptoPanic
-            cp_news = get_cryptopanic_news(symbol)
+            cp_news = await api_rate_limiter.call(get_cryptopanic_news, symbol)
             for news_item in cp_news:
                 sentiment, score = analyze_sentiment(news_item['title'])
                 saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
@@ -230,10 +239,9 @@ async def check_rss_feeds():
                     print(f"📰 CryptoPanic: {symbol} | {sentiment}")
                     await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
             
-            # Reddit
-            reddit_news = get_reddit_news(symbol)
+            reddit_news = await api_rate_limiter.call(get_reddit_news, symbol)
             for news_item in reddit_news:
                 sentiment, score = analyze_sentiment(news_item['title'])
                 saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
@@ -241,10 +249,9 @@ async def check_rss_feeds():
                     print(f"📰 Reddit: {symbol} | {sentiment}")
                     await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
             
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
             
-            # CoinGecko
-            cg_news = get_coingecko_news(symbol)
+            cg_news = await api_rate_limiter.call(get_coingecko_news, symbol)
             for news_item in cg_news:
                 sentiment, score = analyze_sentiment(news_item['title'])
                 saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
@@ -252,85 +259,50 @@ async def check_rss_feeds():
                     print(f"📰 CoinGecko: {symbol} | {sentiment}")
                     await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
             
-            await asyncio.sleep(3)
-            
+            await asyncio.sleep(1.5)
         except Exception as e:
             print(f"⚠️ Free API error for {symbol}: {e}")
     
-    # تنظيف processed_news (الاحتفاظ بآخر 1000)
     if len(processed_news) > 1000:
         processed_news.clear()
     
     print("✅ RSS + Free APIs check completed")
 
-# Auto-cleanup old news
+# ========================= AUTO CLEANUP =========================
 @tasks.loop(hours=1)
 async def cleanup_old_news():
-    """حذف الأخبار الأقدم من 24 ساعة كل ساعة"""
     try:
         conn = get_db_connection()
         if not conn:
             return
-        
         cursor = conn.cursor()
         cursor.execute("""
             DELETE FROM news_sentiment 
             WHERE timestamp < NOW() - INTERVAL '24 hours'
         """)
-        
         deleted_count = cursor.rowcount
         conn.commit()
         cursor.close()
         conn.close()
-        
         if deleted_count > 0:
             print(f"🗑️ Cleaned up {deleted_count} old news (>24h)")
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
 
 @cleanup_old_news.before_loop
-async def before_cleanup():
-    await bot.wait_until_ready()
-
-# Helper function to send news
-async def send_news_to_channels(symbol, title, sentiment, score, source, url):
-    """إرسال الخبر لجميع السيرفرات"""
-    for guild in bot.guilds:
-        news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
-        if news_channel:
-            embed = discord.Embed(
-                title=f"{symbol} News",
-                description=title[:500],
-                color=0x00ff00 if sentiment == 'POSITIVE' else 0xff0000 if sentiment == 'NEGATIVE' else 0xaaaaaa,
-                timestamp=datetime.now(),
-                url=url if url else None
-            )
-            embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
-            embed.add_field(name="Source", value=source, inline=True)
-            embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
-            embed.set_footer(text="News Analysis Bot • MSA")
-            try:
-                await news_channel.send(embed=embed)
-                await asyncio.sleep(1)
-            except:
-                pass
-
 @check_rss_feeds.before_loop
-async def before_check_rss():
+async def before_loops():
     await bot.wait_until_ready()
 
-
-
-
+# ========================= ERROR HANDLING =========================
 @bot.event
 async def on_command_error(ctx, error):
-    # تجاهل أخطاء الأوامر غير الموجودة
     if isinstance(error, commands.CommandNotFound):
         return
-    
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ You need Administrator permissions to use this command!", delete_after=5)
 
+# ========================= START BOT =========================
 print("🚀 Starting News Analysis Bot...")
 try:
     bot.run(TOKEN)
