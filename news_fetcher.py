@@ -139,13 +139,24 @@ async def get_coingecko_news(symbol):
                     return []
                 data = await response.json()
                 market = data.get('market_data', {})
-                price_change = market.get('price_change_percentage_24h', 0)
-                sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
-                return [{
-                    'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
-                    'url': data.get('links', {}).get('homepage', [''])[0],
-                    'sentiment': sentiment,
-                    'source': 'CoinGecko'
-                }]
+                price_change = market.get('price_change_percentage_24h') # No default
+
+                # Handle None case for price_change
+                if price_change is not None:
+                    sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
+                    return [{
+                        'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
+                        'url': data.get('links', {}).get('homepage', [''])[0],
+                        'sentiment': sentiment,
+                        'source': 'CoinGecko'
+                    }]
+                else:
+                    # Return neutral if no price data is available
+                    return [{
+                        'title': f"{coin.upper()} Market data not available",
+                        'url': data.get('links', {}).get('homepage', [''])[0],
+                        'sentiment': 'NEUTRAL',
+                        'source': 'CoinGecko'
+                    }]
     except Exception as e:
         print(f"⚠️ CoinGecko error: {e}")
