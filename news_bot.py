@@ -29,7 +29,7 @@ from config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, 
 from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_news, processed_news
 from database import get_db_connection, create_table, save_news, async_save_news # Import async_save_news
 from sentiment import analyze_sentiment
-from scheduler import cleanup_old_news # Renamed to cleanup_old_news_task in a later step
+from scheduler import cleanup_old_news_task
 
 # ========================= RATE LIMITER =========================
 class RateLimiter:
@@ -177,8 +177,8 @@ async def on_ready():
         print("🔄 RSS Feed Checker: STARTED")
     
     # Start auto-cleanup
-    if not cleanup_old_news.is_running(): # This will be renamed to cleanup_old_news_task
-        cleanup_old_news.start()
+    if not cleanup_old_news_task.is_running():
+        cleanup_old_news_task.start()
         print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
 
 @bot.event
