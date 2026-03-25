@@ -5,7 +5,7 @@ Task scheduling functions
 
 from discord.ext import tasks
 import asyncio
-from database import cleanup_old_news
+from database import async_cleanup_old_news # Import the async version
 
 # RSS Feed Checker
 @tasks.loop(minutes=30)
@@ -22,10 +22,13 @@ async def before_check_rss():
 # Auto-cleanup old news
 @tasks.loop(hours=1)
 async def cleanup_old_news_task():
-    """حذف الأخبار الأقدم من 24 ساعة كل ساعة"""
-    cleanup_old_news()
+    """The task that calls the async cleanup function."""
+    print("🔄 Starting scheduled cleanup of old news...")
+    await async_cleanup_old_news() # Await the async function
+    print("✅ Scheduled cleanup finished.")
 
 @cleanup_old_news_task.before_loop
 async def before_cleanup():
-    from discord_bot import bot
+    """Wait until the bot is ready before starting the loop."""
+    from news_bot import bot # Local import to avoid circular dependency
     await bot.wait_until_ready()
