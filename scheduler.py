@@ -11,6 +11,7 @@ from database import cleanup_old_news
 @tasks.loop(minutes=30)
 async def check_rss_feeds_task():
     """فحص RSS Feeds + Free APIs كل 30 دقيقة"""
+    from news_bot import check_rss_feeds
     await check_rss_feeds()
 
 @check_rss_feeds_task.before_loop
