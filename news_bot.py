@@ -6,6 +6,7 @@ import discord
 import asyncio
 import feedparser
 import aiohttp
+import aiohttp
 from datetime import datetime
 from utils import check_pip_update, load_env_file
 from config_encrypted import get_discord_token
@@ -28,7 +29,7 @@ from config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, 
 from news_fetcher import get_cryptopanic_news, get_reddit_news, get_coingecko_news, processed_news
 from database import get_db_connection, create_table, save_news, async_save_news # Import async_save_news
 from sentiment import analyze_sentiment
-from scheduler import cleanup_old_news
+from scheduler import cleanup_old_news # Renamed to cleanup_old_news_task in a later step
 
 # ========================= RATE LIMITER =========================
 class RateLimiter:
@@ -176,7 +177,7 @@ async def on_ready():
         print("🔄 RSS Feed Checker: STARTED")
     
     # Start auto-cleanup
-    if not cleanup_old_news.is_running():
+    if not cleanup_old_news.is_running(): # This will be renamed to cleanup_old_news_task
         cleanup_old_news.start()
         print("🗑️ Auto-Cleanup: STARTED (every 1 hour)")
 
