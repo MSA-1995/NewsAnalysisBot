@@ -238,6 +238,14 @@ def cleanup_old_news():
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
 
+async def async_cleanup_old_news():
+    """Asynchronously run the cleanup task."""
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, cleanup_old_news)
+    except Exception as e:
+        print(f"❌ Async cleanup error: {e}")
+
 # Get news stats
 def get_news_stats():
     """Get news statistics"""
