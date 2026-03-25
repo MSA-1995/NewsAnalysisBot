@@ -6,7 +6,6 @@ import discord
 import asyncio
 import feedparser
 import aiohttp
-import aiohttp
 from datetime import datetime
 from utils import check_pip_update, load_env_file
 from config_encrypted import get_discord_token
