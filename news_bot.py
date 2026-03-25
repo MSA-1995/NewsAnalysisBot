@@ -102,6 +102,35 @@ async def send_news_to_channels(symbol, title, sentiment, score, source, url):
             await send_discord_message(news_channel, embed)
             await asyncio.sleep(0.5)  # extra safety delay
 
+async def initialize_database():
+    """Runs synchronous database setup in an executor to avoid blocking."""
+    loop = asyncio.get_running_loop()
+    
+    def _db_setup():
+        """The synchronous part of the database setup."""
+        try:
+            # 1. Test database connection
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                conn.close()  # Close the test connection immediately
+                print("✅ Database: Test connection successful.")
+                
+                # 2. Create table (gets its own connection)
+                create_table()
+                print("✅ Database: Table check/creation complete.")
+            else:
+                print("❌ Database: Connection failed during setup.")
+        except Exception as e:
+            # This will catch the 'SSL connection has been closed unexpectedly' error
+            print(f"❌ Database: Initialization error - {e}")
+
+    print("🔄 Initializing database...")
+    await loop.run_in_executor(None, _db_setup)
+    print("✅ Database: Initialization process finished.")
+
 # ========================= BOT EVENTS =========================
 @bot.event
 async def on_ready():
@@ -114,21 +143,8 @@ async def on_ready():
     discord_rate_limiter.start()
     print("🚦 Rate Limiters: STARTED")
     
-    # Test database connection
-    try:
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.close()
-            print("✅ Database: Connected (Supabase)")
-        else:
-            print("❌ Database: Connection failed")
-    except Exception as e:
-        print(f"❌ Database: Connection error - {e}")
-    
-    # Create table
-    create_table()
+    # Initialize database asynchronously to prevent blocking
+    await initialize_database()
     
     # Auto-create news channel if not exists
     for guild in bot.guilds:
