@@ -37,6 +37,11 @@ class RateLimiter:
         self.max_calls = max_calls
         self.period = period
         self.calls = 0
+        self.lock = None
+        self.queue = None
+
+    def start(self):
+        """Starts the worker task — يُستدعى بعد ما يشتغل event loop"""
         self.lock = asyncio.Lock()
         self.queue = asyncio.Queue()
         asyncio.create_task(self._worker())
@@ -61,7 +66,7 @@ class RateLimiter:
         await self.queue.put((func, args, kwargs, fut))
         return await fut
 
-# RateLimiters: 1 request per 1.5 sec for APIs, 1 msg/sec for Discord
+# إنشاء بدون تشغيل — يشتغلون في on_ready
 api_rate_limiter = RateLimiter(max_calls=1, period=1.5)
 discord_rate_limiter = RateLimiter(max_calls=1, period=1.0)
 
@@ -103,6 +108,11 @@ async def on_ready():
     print(f"✅ {bot.user} is online!")
     print(f"📊 Connected to {len(bot.guilds)} server(s)")
     print("📰 News Analysis System: ACTIVE")
+
+    # Start rate limiters
+    api_rate_limiter.start()
+    discord_rate_limiter.start()
+    print("🚦 Rate Limiters: STARTED")
     
     # Test database connection
     try:
@@ -203,8 +213,9 @@ async def check_rss_feeds():
                 symbols = extract_symbols(full_text)
                 if symbols:
                     sentiment, score = analyze_sentiment(full_text)
+                    source_title = feed.feed.get('title', 'RSS') # Correctly get source title from the main feed object
                     for symbol in symbols:
-                        saved = save_news(symbol, sentiment, score, title, entry.feed.get('title', 'RSS'), 0)
+                        saved = save_news(symbol, sentiment, score, title, source_title, 0)
                         if saved:
                             print(f"📰 RSS News: {symbol} | {sentiment} ({score:.2f})")
                             for guild in bot.guilds:
@@ -218,7 +229,7 @@ async def check_rss_feeds():
                                         url=entry.get('link', '')
                                     )
                                     embed.add_field(name="Sentiment", value=f"{sentiment} ({score:.2f})", inline=True)
-                                    embed.add_field(name="Source", value=entry.feed.get('title', 'RSS'), inline=True)
+                                    embed.add_field(name="Source", value=source_title, inline=True)
                                     embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
                                     embed.set_footer(text="News Analysis Bot • MSA")
                                     await send_discord_message(news_channel, embed)
