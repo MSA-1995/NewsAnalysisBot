@@ -4,7 +4,7 @@ Task scheduling functions
 """
 
 from discord.ext import tasks
-from news_fetcher import check_rss_feeds
+from news_bot import check_rss_feeds
 from database import cleanup_old_news
 
 # RSS Feed Checker
