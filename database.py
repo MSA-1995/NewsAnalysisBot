@@ -196,6 +196,21 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
                 time.sleep(3)  # زيادة الانتظار من 2 إلى 3 ثواني
             else:
                 return False
+
+async def async_save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
+    """Asynchronously save news to the database."""
+    loop = asyncio.get_running_loop()
+    try:
+        # Run the synchronous save_news function in an executor
+        await loop.run_in_executor(
+            None, 
+            save_news, 
+            symbol, sentiment, score, headline, source, channel_id, retry
+        )
+        return True
+    except Exception as e:
+        print(f"❌ Async save news error: {e}")
+        return False
     
     return False
 
