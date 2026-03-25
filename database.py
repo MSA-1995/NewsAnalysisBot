@@ -11,9 +11,7 @@ from datetime import datetime
 from config import DATABASE_URL, CRITICAL_WEBHOOK
 import requests
 
-# Database Connection Pool
-_db_conn = None
-_db_params = None
+# No more global connection pool
 
 def send_critical_alert(error_type, message, details=None):
     """Send critical error alert to Discord"""
@@ -43,56 +41,11 @@ def send_critical_alert(error_type, message, details=None):
     except:
         pass
 
-def init_db_params():
-    """تهيئة معاملات الاتصال"""
-    global _db_params
-    if _db_params:
-        return
-    
-    from urllib.parse import urlparse, unquote
-    parsed = urlparse(DATABASE_URL)
-    
-    _db_params = {
-        'host': parsed.hostname,
-        'port': parsed.port,
-        'database': parsed.path[1:],
-        'user': parsed.username,
-        'password': unquote(parsed.password),
-        'sslmode': 'require',
-        'connect_timeout': 10,
-        'keepalives': 1,
-        'keepalives_idle': 30,
-        'keepalives_interval': 10,
-        'keepalives_count': 5
-    }
-
 def get_db_connection():
-    """الاتصال بقاعدة البيانات مع إعادة استخدام"""
-    global _db_conn, _db_params
-    
+    """Always create a new database connection."""
     try:
-        init_db_params()
-        
-        # فحص الاتصال الحالي
-        if _db_conn and not _db_conn.closed:
-            try:
-                # اختبار الاتصال
-                cursor = _db_conn.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
-                return _db_conn
-            except:
-                # الاتصال معطل - نغلقه
-                try:
-                    _db_conn.close()
-                except:
-                    pass
-                _db_conn = None
-        
-        # إنشاء اتصال جديد
-        _db_conn = psycopg2.connect(**_db_params)
-        return _db_conn
-        
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+        return conn
     except Exception as e:
         print(f"❌ Database connection error: {e}")
         send_critical_alert("Database Connection", "Failed to connect to database", str(e))
@@ -149,29 +102,13 @@ def create_table():
 # Save news to database
 def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
     """حفظ الخبر في قاعدة البيانات مع إعادة محاولة"""
-    global _db_conn
-    
     for attempt in range(retry):
         conn = None
         try:
-            # إنشاء اتصال جديد مباشرة (بدون إعادة استخدام)
-            from urllib.parse import urlparse, unquote
-            parsed = urlparse(DATABASE_URL)
-            
-            conn = psycopg2.connect(
-                host=parsed.hostname,
-                port=parsed.port,
-                database=parsed.path[1:],
-                user=parsed.username,
-                password=unquote(parsed.password),
-                sslmode='prefer',  # prefer بدلاً من require
-                connect_timeout=15,
-                keepalives=1,
-                keepalives_idle=30,
-                keepalives_interval=10,
-                keepalives_count=5
-            )
-            
+            conn = get_db_connection() # Use the simplified connection function
+            if not conn:
+                raise Exception("Failed to get DB connection")
+
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO news_sentiment 
@@ -194,7 +131,7 @@ def save_news(symbol, sentiment, score, headline, source, channel_id, retry=3):
             
             if attempt < retry - 1:
                 import time
-                time.sleep(3)  # زيادة الانتظار من 2 إلى 3 ثواني
+                time.sleep(3)
             else:
                 return False
 
