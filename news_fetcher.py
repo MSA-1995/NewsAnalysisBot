@@ -4,7 +4,7 @@ Fetch news from RSS feeds and free APIs
 """
 
 import feedparser
-import requests
+import aiohttp
 import asyncio
 from datetime import datetime
 from config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, SYMBOLS
@@ -15,58 +15,61 @@ processed_news = set()
 # Reddit Token
 reddit_token = None
 
-def get_reddit_token():
-    """الحصول على Reddit Access Token"""
+async def get_reddit_token():
+    """الحصول على Reddit Access Token بشكل غير متزامن"""
     global reddit_token
     if not REDDIT_CLIENT_ID or not REDDIT_SECRET:
         return None
     try:
-        auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_SECRET)
+        auth = aiohttp.BasicAuth(REDDIT_CLIENT_ID, REDDIT_SECRET)
         data = {'grant_type': 'client_credentials'}
         headers = {'User-Agent': 'NewsBot/1.0'}
-        response = requests.post('https://www.reddit.com/api/v1/access_token',
-                               auth=auth, data=data, headers=headers, timeout=10)
-        if response.status_code == 200:
-            reddit_token = response.json()['access_token']
-            return reddit_token
-    except:
-        pass
+        async with aiohttp.ClientSession() as session:
+            async with session.post('https://www.reddit.com/api/v1/access_token',
+                                    auth=auth, data=data, headers=headers, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    reddit_token = data.get('access_token')
+                    return reddit_token
+    except Exception as e:
+        print(f"⚠️ Reddit token error: {e}")
     return None
 
-# CryptoPanic News
-def get_cryptopanic_news(symbol):
-    """جلب أخبار من CryptoPanic (Twitter + Reddit + News)"""
+async def get_cryptopanic_news(symbol):
+    """جلب أخبار من CryptoPanic بشكل غير متزامن"""
     if not CRYPTOPANIC_KEY:
         return []
     try:
         coin = symbol.split('/')[0]
         url = f"https://cryptopanic.com/api/v1/posts/?auth_token={CRYPTOPANIC_KEY}&currencies={coin}&filter=hot"
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            return []
-        data = response.json()
-        news = []
-        for post in data.get('results', [])[:3]:
-            votes = post.get('votes', {})
-            positive = votes.get('positive', 0)
-            negative = votes.get('negative', 0)
-            sentiment = 'POSITIVE' if positive > negative * 2 else 'NEGATIVE' if negative > positive * 2 else 'NEUTRAL'
-            news.append({
-                'title': post.get('title', ''),
-                'url': post.get('url', ''),
-                'sentiment': sentiment,
-                'source': 'CryptoPanic'
-            })
-        return news
-    except:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                if response.status != 200:
+                    print(f"⚠️ CryptoPanic API error: {response.status}")
+                    return []
+                data = await response.json()
+                news = []
+                for post in data.get('results', [])[:3]:
+                    votes = post.get('votes', {})
+                    positive = votes.get('positive', 0)
+                    negative = votes.get('negative', 0)
+                    sentiment = 'POSITIVE' if positive > negative * 2 else 'NEGATIVE' if negative > positive * 2 else 'NEUTRAL'
+                    news.append({
+                        'title': post.get('title', ''),
+                        'url': post.get('url', ''),
+                        'sentiment': sentiment,
+                        'source': 'CryptoPanic'
+                    })
+                return news
+    except Exception as e:
+        print(f"⚠️ CryptoPanic error: {e}")
         return []
 
-# Reddit News
-def get_reddit_news(symbol):
-    """جلب أخبار من Reddit"""
+async def get_reddit_news(symbol):
+    """جلب أخبار من Reddit بشكل غير متزامن"""
     global reddit_token
     if not reddit_token:
-        reddit_token = get_reddit_token()
+        reddit_token = await get_reddit_token()
     if not reddit_token:
         return []
     try:
@@ -76,29 +79,50 @@ def get_reddit_news(symbol):
         }
         coin = symbol.split('/')[0].lower()
         url = f"https://oauth.reddit.com/r/cryptocurrency/search?q={coin}&sort=hot&limit=3&t=day"
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            return []
-        data = response.json()
-        news = []
-        for post in data.get('data', {}).get('children', []):
-            p = post.get('data', {})
-            score = p.get('score', 0)
-            upvote_ratio = p.get('upvote_ratio', 0.5)
-            sentiment = 'POSITIVE' if upvote_ratio > 0.7 and score > 100 else 'NEGATIVE' if upvote_ratio < 0.4 else 'NEUTRAL'
-            news.append({
-                'title': p.get('title', ''),
-                'url': f"https://reddit.com{p.get('permalink', '')}",
-                'sentiment': sentiment,
-                'source': 'Reddit'
-            })
-        return news
-    except:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                data = None
+                if response.status != 200:
+                    if response.status == 401:
+                        print("Reddit token expired, refreshing...")
+                        reddit_token = await get_reddit_token()
+                        if reddit_token:
+                            headers['Authorization'] = f'bearer {reddit_token}'
+                            async with session.get(url, headers=headers, timeout=10) as retry_response:
+                                if retry_response.status == 200:
+                                    data = await retry_response.json()
+                                else:
+                                    return []
+                        else:
+                            return []
+                    else:
+                        print(f"⚠️ Reddit API error: {response.status}")
+                        return []
+                else:
+                    data = await response.json()
+                
+                if not data:
+                    return []
+
+                news = []
+                for post in data.get('data', {}).get('children', []):
+                    p = post.get('data', {})
+                    score = p.get('score', 0)
+                    upvote_ratio = p.get('upvote_ratio', 0.5)
+                    sentiment = 'POSITIVE' if upvote_ratio > 0.7 and score > 100 else 'NEGATIVE' if upvote_ratio < 0.4 else 'NEUTRAL'
+                    news.append({
+                        'title': p.get('title', ''),
+                        'url': f"https://reddit.com{p.get('permalink', '')}",
+                        'sentiment': sentiment,
+                        'source': 'Reddit'
+                    })
+                return news
+    except Exception as e:
+        print(f"⚠️ Reddit news error: {e}")
         return []
 
-# CoinGecko News
-def get_coingecko_news(symbol):
-    """جلب معلومات من CoinGecko"""
+async def get_coingecko_news(symbol):
+    """جلب معلومات من CoinGecko بشكل غير متزامن"""
     try:
         coin = symbol.split('/')[0].lower()
         coin_map = {
@@ -108,147 +132,24 @@ def get_coingecko_news(symbol):
         }
         coin_id = coin_map.get(coin, coin)
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            return []
-        data = response.json()
-        market = data.get('market_data', {})
-        price_change = market.get('price_change_percentage_24h', 0)
-        sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
-        return [{
-            'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
-            'url': data.get('links', {}).get('homepage', [''])[0],
-            'sentiment': sentiment,
-            'source': 'CoinGecko'
-        }]
-    except:
-        return []
-
-# RSS Feed Checker
-async def check_rss_feeds():
-    """فحص RSS Feeds + Free APIs كل 30 دقيقة"""
-    print("🔍 Checking RSS feeds + Free APIs...")
-    
-    # 1. RSS Feeds (الموجودة)
-    for feed_url in RSS_FEEDS:
-        try:
-            feed = feedparser.parse(feed_url)
-            
-            for entry in feed.entries[:5]:  # أحدث 5 أخبار
-                # تجنب التكرار
-                news_id = entry.get('id', entry.get('link', ''))
-                if news_id in processed_news:
-                    continue
-                
-                processed_news.add(news_id)
-                
-                # استخراج العنوان والوصف
-                title = entry.get('title', '')
-                description = entry.get('summary', entry.get('description', ''))
-                full_text = f"{title} {description}"
-                
-                # استخراج العملات
-                symbols = extract_symbols(full_text)
-                
-                if symbols:
-                    # تحليل Sentiment
-                    sentiment, score = analyze_sentiment(full_text)
-                    
-                    for symbol in symbols:
-                        # حفظ في Database
-                        from database import save_news
-                        saved = save_news(
-                            symbol=symbol,
-                            sentiment=sentiment,
-                            score=score,
-                            headline=title,
-                            source=feed.feed.get('title', 'RSS'),
-                            channel_id=0
-                        )
-                        
-                        if saved:
-                            print(f"📰 RSS News: {symbol} | {sentiment} ({score:.2f})")
-                            
-                            # إرسال في news-analysis-bot
-                            from discord_bot import send_news_to_channels
-                            await send_news_to_channels(symbol, title, sentiment, score, feed.feed.get('title', 'RSS'), entry.get('link', ''))
-            
-            await asyncio.sleep(5)  # بين كل Feed
-            
-        except Exception as e:
-            print(f"❌ RSS Feed error ({feed_url}): {e}")
-    
-    # 2. Free APIs (CryptoPanic + Reddit + CoinGecko)
-    print("🔍 Checking Free APIs...")
-    
-    # العملات المدعومة
-    supported_coins = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT', 'MATIC/USDT', 'AVAX/USDT', 'LINK/USDT']
-    
-    for symbol in supported_coins:
-        try:
-            # CryptoPanic
-            cp_news = get_cryptopanic_news(symbol)
-            for news_item in cp_news:
-                sentiment, score = analyze_sentiment(news_item['title'])
-                from database import save_news
-                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
-                if saved:
-                    print(f"📰 CryptoPanic: {symbol} | {sentiment}")
-                    from discord_bot import send_news_to_channels
-                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
-            
-            await asyncio.sleep(2)
-            
-            # Reddit
-            reddit_news = get_reddit_news(symbol)
-            for news_item in reddit_news:
-                sentiment, score = analyze_sentiment(news_item['title'])
-                from database import save_news
-                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
-                if saved:
-                    print(f"📰 Reddit: {symbol} | {sentiment}")
-                    from discord_bot import send_news_to_channels
-                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
-            
-            await asyncio.sleep(2)
-            
-            # CoinGecko
-            cg_news = get_coingecko_news(symbol)
-            for news_item in cg_news:
-                sentiment, score = analyze_sentiment(news_item['title'])
-                from database import save_news
-                saved = save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
-                if saved:
-                    print(f"📰 CoinGecko: {symbol} | {sentiment}")
-                    from discord_bot import send_news_to_channels
-                    await send_news_to_channels(symbol, news_item['title'], sentiment, score, news_item['source'], news_item['url'])
-            
-            await asyncio.sleep(3)
-            
-        except Exception as e:
-            print(f"⚠️ Free API error for {symbol}: {e}")
-    
-    # تنظيف processed_news (الاحتفاظ بآخر 1000)
-    if len(processed_news) > 1000:
-        processed_news.clear()
-    
-    print("✅ RSS + Free APIs check completed")
-
-# Extract crypto symbols from text
-def extract_symbols(text):
-    """استخراج رموز العملات من النص"""
-    symbols = []
-    
-    # Common crypto keywords (Top 50 - March 2026)
-    crypto_keywords = {
-        # Top 10 - Giants
-        'BTC': 'BTC/USDT', 'BITCOIN': 'BTC/USDT',
-        'ETH': 'ETH/USDT', 'ETHEREUM': 'ETH/USDT',
-        'XRP': 'XRP/USDT', 'RIPPLE': 'XRP/USDT',
-        'BNB': 'BNB/USDT', 'BINANCE': 'BNB/USDT',
-        'SOL': 'SOL/USDT', 'SOLANA': 'SOL/USDT',
-        'DOGE': 'DOGE/USDT', 'DOGECOIN': 'DOGE/USDT',
-        'ADA': 'ADA/USDT', 'CARDANO': 'ADA/USDT',
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                if response.status != 200:
+                    print(f"⚠️ CoinGecko API error: {response.status}")
+                    return []
+                data = await response.json()
+                market = data.get('market_data', {})
+                price_change = market.get('price_change_percentage_24h', 0)
+                sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
+                return [{
+                    'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
+                    'url': data.get('links', {}).get('homepage', [''])[0],
+                    'sentiment': sentiment,
+                    'source': 'CoinGecko'
+                }]
+    except Exception as e:
+        print(f"⚠️ CoinGecko error: {e}")
+        return []        'ADA': 'ADA/USDT', 'CARDANO': 'ADA/USDT',
         'TRX': 'TRX/USDT', 'TRON': 'TRX/USDT',
         'AVAX': 'AVAX/USDT', 'AVALANCHE': 'AVAX/USDT',
         'TON': 'TON/USDT', 'TONCOIN': 'TON/USDT',
