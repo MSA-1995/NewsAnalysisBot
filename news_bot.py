@@ -325,10 +325,12 @@ async def on_command_error(ctx, error):
         await ctx.send("❌ You need Administrator permissions to use this command!", delete_after=5)
 
 # ========================= START BOT =========================
-print("🚀 Starting News Analysis Bot...")
-try:
-    bot.run(TOKEN)
-except Exception as e:
-    print(f"❌ Bot crashed: {e}")
-    from utils import send_critical_alert
-    send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
+if __name__ == "__main__":
+    print("🚀 Starting News Analysis Bot...")
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"❌ Bot crashed: {e}")
+        # The following is a synchronous alert, which is fine here as the loop is closed.
+        from database import send_critical_alert
+        send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
