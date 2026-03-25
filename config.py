@@ -27,20 +27,23 @@ def check_pip_update():
 check_pip_update()
 
 # ========== LOAD ENV FILE ==========
-for _env_file in [
-    '/home/container/NewsAnalysisBot/.env',
-    '/home/container/.env',
-]:
+# Find the project root and load .env
+project_root = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(project_root, '.env')
+
+if os.path.exists(env_path):
     try:
-        with open(_env_file) as _f:
-            for _line in _f:
-                _line = _line.strip()
-                if _line and not _line.startswith('#') and '=' in _line:
-                    _k, _v = _line.split('=', 1)
-                    os.environ.setdefault(_k.strip(), _v.strip())
-        break
-    except:
-        pass
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+        print("✅ Environment variables loaded from .env")
+    except Exception as e:
+        print(f"⚠️ Error loading .env file: {e}")
+else:
+    print("⚠️ .env file not found. Please ensure it exists in the project root.")
 
 # Environment Variables
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -71,13 +74,4 @@ SYMBOLS = [
     # 11-20 - Major Alts
     'LINK/USDT', 'DOT/USDT', 'BCH/USDT', 'NEAR/USDT', 'LTC/USDT',
     'UNI/USDT', 'ATOM/USDT', 'XLM/USDT', 'HBAR/USDT', 'ICP/USDT',
-    # 21-30 - Strong Layer 1 & Layer 2
-    'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'INJ/USDT',
-    'TIA/USDT', 'SEI/USDT', 'POL/USDT', 'ALGO/USDT', 'VET/USDT',
-    # 31-40 - DeFi & Infrastructure
-    'AAVE/USDT', 'FIL/USDT', 'RENDER/USDT', 'NEO/USDT', 'RUNE/USDT', 
-    'LDO/USDT', 'CRV/USDT', 'SNX/USDT', 'COMP/USDT', 'ETC/USDT', 
-    # 41-50 - Meme, Gaming & Others
-    'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'FLOKI/USDT', 'BONK/USDT',
-    'IMX/USDT', 'SAND/USDT', 'MANA/USDT', 'AXS/USDT', 'GALA/USDT',
 ]
