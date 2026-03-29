@@ -249,8 +249,8 @@ async def check_rss_feeds():
 
     # 2. Free APIs
     print("🔍 Checking Free APIs...")
-    supported_coins = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT', 'MATIC/USDT', 'AVAX/USDT', 'LINK/USDT']
-    for symbol in supported_coins:
+    # Use the unified symbol list from config.py
+    for symbol in SYMBOLS:
         try:
             # Correctly await the async functions via the rate limiter
             cp_news = await api_rate_limiter.call(get_cryptopanic_news, symbol)
