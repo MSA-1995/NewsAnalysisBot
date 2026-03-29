@@ -121,42 +121,76 @@ async def get_reddit_news(symbol):
         print(f"⚠️ Reddit news error: {e}")
         return []
 
-async def get_coingecko_news(symbol):
-    """جلب معلومات من CoinGecko بشكل غير متزامن"""
-    try:
-        coin = symbol.split('/')[0].lower()
-        coin_map = {
-            'btc': 'bitcoin', 'eth': 'ethereum', 'bnb': 'binancecoin',
-            'sol': 'solana', 'ada': 'cardano', 'matic': 'matic-network',
-            'avax': 'avalanche-2', 'link': 'chainlink'
-        }
-        coin_id = coin_map.get(coin, coin)
-        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as response:
-                if response.status != 200:
-                    print(f"⚠️ CoinGecko API error: {response.status}")
-                    return []
-                data = await response.json()
-                market = data.get('market_data', {})
-                price_change = market.get('price_change_percentage_24h') # No default
+# ========================= COINGECKO BATCH CACHE =========================
+# طلب واحد لكل العملات بدل 20 طلب منفصل - يمنع 429
+_coingecko_cache = {}        # {coin_id: {price_change, timestamp}}
+_coingecko_last_fetch = None # وقت آخر طلب batch
+_COINGECKO_CACHE_TTL = 900   # 15 دقيقة (CoinGecko مجاني = 30 طلب/دقيقة)
 
-                # Handle None case for price_change
-                if price_change is not None:
-                    sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
-                    return [{
-                        'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
-                        'url': data.get('links', {}).get('homepage', [''])[0],
-                        'sentiment': sentiment,
-                        'source': 'CoinGecko'
-                    }]
-                else:
-                    # Return neutral if no price data is available
-                    return [{
-                        'title': f"{coin.upper()} Market data not available",
-                        'url': data.get('links', {}).get('homepage', [''])[0],
-                        'sentiment': 'NEUTRAL',
-                        'source': 'CoinGecko'
-                    }]
+COIN_MAP = {
+    'btc': 'bitcoin', 'eth': 'ethereum', 'bnb': 'binancecoin',
+    'sol': 'solana', 'ada': 'cardano', 'xrp': 'ripple',
+    'doge': 'dogecoin', 'avax': 'avalanche-2', 'link': 'chainlink',
+    'dot': 'polkadot', 'bch': 'bitcoin-cash', 'near': 'near',
+    'uni': 'uniswap', 'atom': 'cosmos', 'xlm': 'stellar',
+    'etc': 'ethereum-classic', 'grt': 'the-graph', 'aave': 'aave',
+    'fil': 'filecoin', 'sand': 'the-sandbox', 'algo': 'algorand',
+    'matic': 'matic-network', 'trx': 'tron', 'ltc': 'litecoin',
+}
+
+async def _fetch_coingecko_batch():
+    """طلب واحد يجلب بيانات كل العملات دفعة واحدة"""
+    global _coingecko_cache, _coingecko_last_fetch
+    try:
+        coin_ids = ','.join(COIN_MAP.values())
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_ids}&vs_currencies=usd&include_24hr_change=true"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=15) as response:
+                if response.status == 429:
+                    print("⚠️ CoinGecko 429 - سيتم المحاولة في الدورة القادمة")
+                    return
+                if response.status != 200:
+                    print(f"⚠️ CoinGecko batch error: {response.status}")
+                    return
+                data = await response.json()
+                _coingecko_cache = data
+                _coingecko_last_fetch = datetime.now()
+                print(f"✅ CoinGecko: جلب {len(data)} عملة بطلب واحد")
+    except Exception as e:
+        print(f"⚠️ CoinGecko batch fetch error: {e}")
+
+async def get_coingecko_news(symbol):
+    """جلب معلومات من CoinGecko - من الـ cache (طلب واحد لكل العملات)"""
+    global _coingecko_last_fetch
+    try:
+        # تحديث الـ cache إذا انتهت صلاحيته أو فارغ
+        now = datetime.now()
+        cache_expired = (
+            _coingecko_last_fetch is None or
+            (now - _coingecko_last_fetch).total_seconds() > _COINGECKO_CACHE_TTL
+        )
+        if cache_expired:
+            await _fetch_coingecko_batch()
+
+        coin = symbol.split('/')[0].lower()
+        coin_id = COIN_MAP.get(coin)
+
+        # العملة مو في القائمة - تجاهل بهدوء
+        if not coin_id:
+            return []
+
+        coin_data = _coingecko_cache.get(coin_id, {})
+        price_change = coin_data.get('usd_24h_change')
+
+        if price_change is not None:
+            sentiment = 'POSITIVE' if price_change > 2 else 'NEGATIVE' if price_change < -2 else 'NEUTRAL'
+            return [{
+                'title': f"{coin.upper()} Market: {price_change:.2f}% (24h)",
+                'url': f"https://www.coingecko.com/en/coins/{coin_id}",
+                'sentiment': sentiment,
+                'source': 'CoinGecko'
+            }]
+        return []
     except Exception as e:
         print(f"⚠️ CoinGecko error: {e}")
+        return []
