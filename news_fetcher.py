@@ -135,7 +135,17 @@ COIN_MAP = {
     'uni': 'uniswap', 'atom': 'cosmos', 'xlm': 'stellar',
     'etc': 'ethereum-classic', 'grt': 'the-graph', 'aave': 'aave',
     'fil': 'filecoin', 'sand': 'the-sandbox', 'algo': 'algorand',
-    'matic': 'matic-network', 'trx': 'tron', 'ltc': 'litecoin',
+    'trx': 'tron', 'ltc': 'litecoin',
+    # 50 عملة - العملات الجديدة
+    'sui': 'sui', 'pepe': 'pepe', 'fet': 'fetch-ai', 'wld': 'worldcoin',
+    'chz': 'chiliz', 'ena': 'ethena', 'shib': 'shiba-inu', 'bonk': 'bonk',
+    'render': 'render-token', 'apt': 'aptos', 'ton': 'the-open-network',
+    'arb': 'arbitrum', 'op': 'optimism', 'mana': 'decentraland',
+    'axs': 'axie-infinity', 'theta': 'theta-token', 'icp': 'internet-computer',
+    'vet': 'vechain', 'floki': 'floki', 'wif': 'dogwifcoin',
+    'crv': 'curve-dao-token', 'sushi': 'sushi', '1inch': '1inch',
+    'comp': 'compound', 'yfi': 'yearn-finance', 'snx': 'havven',
+    'gala': 'gala', 'sui': 'sui',
 }
 
 async def _fetch_coingecko_batch():
