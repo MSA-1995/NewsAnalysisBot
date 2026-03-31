@@ -67,7 +67,7 @@ RSS_FEEDS = [
     'https://u.today/rss',
 ]
 
-# قائمة العملات الثابتة (Top 50 by Market Cap - March 2026)
+# قائمة العملات (نفس التداول - 50 عملة)
 SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT',
     'DOGE/USDT', 'TRX/USDT', 'ADA/USDT', 'LINK/USDT', 'SUI/USDT',
