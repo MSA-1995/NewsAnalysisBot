@@ -6,11 +6,36 @@ import discord
 import asyncio
 import feedparser
 import aiohttp
-from datetime import datetime
-from utils import check_pip_update, load_env_file
-from config_encrypted import get_discord_token
+from datetime import datetime, timedelta
+from utils import check_pip_update, load_env_file, send_discord
+from config_encrypted import get_discord_token, get_critical_webhook
 from discord_bot import bot
 from discord.ext import commands, tasks
+
+# Cache for sent news to prevent duplicates (stores hashes of recent news titles)
+sent_news_cache = set()
+NEWS_CACHE_MAX_SIZE = 200  # Keep only last 200 news
+NEWS_CACHE_EXPIRY = timedelta(hours=2)  # Clear cache every 2 hours
+last_news_cache_clear = datetime.now()
+
+def _clear_expired_news_cache():
+    """Clear the sent news cache if expired."""
+    global last_news_cache_clear
+    if datetime.now() - last_news_cache_clear > NEWS_CACHE_EXPIRY:
+        sent_news_cache.clear()
+        last_news_cache_clear = datetime.now()
+
+def _is_news_duplicate(title):
+    """Check if news was recently sent to prevent duplicates."""
+    _clear_expired_news_cache()
+    news_hash = hash(title.lower().strip())
+    if news_hash in sent_news_cache:
+        return True
+    if len(sent_news_cache) >= NEWS_CACHE_MAX_SIZE:
+        # Remove oldest (approximate by popping one)
+        sent_news_cache.pop()
+    sent_news_cache.add(news_hash)
+    return False
 
 # Load environment and check pip
 check_pip_update()
@@ -84,7 +109,9 @@ async def send_discord_message(channel, embed):
     await discord_rate_limiter.call(_send)
 
 async def send_news_to_channels(symbol, title, sentiment, score, source, url):
-    """Send news to all guilds using queue"""
+    """Send news to all guilds using queue, with deduplication"""
+    if _is_news_duplicate(title):
+        return  # Skip duplicate news
     for guild in bot.guilds:
         news_channel = discord.utils.get(guild.text_channels, name="news-analysis-bot")
         if news_channel:
