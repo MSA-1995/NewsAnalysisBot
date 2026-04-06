@@ -6,6 +6,49 @@ Helper functions and utilities
 import os
 import subprocess
 import sys
+import requests
+import time
+from datetime import datetime, timedelta
+
+# Cache for sent messages to prevent duplicates (stores hashes of recent messages)
+sent_messages_cache = set()
+CACHE_MAX_SIZE = 100  # Keep only last 100 messages
+CACHE_EXPIRY = timedelta(hours=1)  # Clear cache every hour
+last_cache_clear = datetime.now()
+
+def _clear_expired_cache():
+    """Clear the sent messages cache if expired."""
+    global last_cache_clear
+    if datetime.now() - last_cache_clear > CACHE_EXPIRY:
+        sent_messages_cache.clear()
+        last_cache_clear = datetime.now()
+
+def _is_message_duplicate(message):
+    """Check if message was recently sent to prevent duplicates."""
+    _clear_expired_cache()
+    message_hash = hash(message)
+    if message_hash in sent_messages_cache:
+        return True
+    if len(sent_messages_cache) >= CACHE_MAX_SIZE:
+        # Remove oldest (approximate by popping one)
+        sent_messages_cache.pop()
+    sent_messages_cache.add(message_hash)
+    return False
+
+def send_discord(webhook_url, message, retries=3):
+    """Send a simple Discord message with retries, rate limit handling, and deduplication."""
+    if _is_message_duplicate(message):
+        return  # Skip duplicate message
+    for i in range(retries):
+        try:
+            response = requests.post(webhook_url, json={"content": message})
+            if response.status_code == 429:
+                wait = response.json().get('retry_after', 2)
+                time.sleep(wait)
+                continue
+            return
+        except:
+            time.sleep(2)
 
 def check_pip_update():
     """فحص وتحديث pip"""
