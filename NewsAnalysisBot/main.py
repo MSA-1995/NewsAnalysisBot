@@ -353,15 +353,12 @@ async def on_command_error(ctx, error):
 # ========================= START BOT =========================
 if __name__ == "__main__":
     print("Starting News Analysis Bot...")
-    if USE_DISCORD:
-        try:
-            bot.run(TOKEN)
-        except Exception as e:
-            print(f"ERROR: Bot crashed: {e}")
-            # The following is a synchronous alert, which is fine here as the loop is closed.
-            from src.core.database import send_critical_alert
-            send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
-    else:
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"ERROR: Discord connection failed: {e}")
+        print("Running news fetching without Discord notifications...")
+        # Run without Discord
         # Run without Discord
         import asyncio
         async def run_without_discord():
