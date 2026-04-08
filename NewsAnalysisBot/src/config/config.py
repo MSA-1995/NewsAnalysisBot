@@ -27,8 +27,8 @@ def check_pip_update():
 check_pip_update()
 
 # ========== LOAD ENV FILE ==========
-# Find the project root and load .env
-env_path = r"C:\Users\MSA\myfile\BTC\NewsAnalysisBot\.env"
+# Load .env from current working directory
+env_path = os.path.join(os.getcwd(), '.env')
 
 if os.path.exists(env_path):
     try:
