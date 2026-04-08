@@ -44,9 +44,9 @@ load_env_file()
 # Get Discord token
 TOKEN = get_discord_token()
 
-if not TOKEN:
-    print("Error: Failed to decrypt DISCORD_TOKEN!")
-    exit(1)
+# Force running without Discord for news fetching
+USE_DISCORD = False
+print("Running news fetching without Discord notifications.")
 
 # Import remaining modules
 from src.config.config import RSS_FEEDS, CRYPTOPANIC_KEY, REDDIT_CLIENT_ID, REDDIT_SECRET, SYMBOLS
@@ -353,10 +353,86 @@ async def on_command_error(ctx, error):
 # ========================= START BOT =========================
 if __name__ == "__main__":
     print("Starting News Analysis Bot...")
-    try:
-        bot.run(TOKEN)
-    except Exception as e:
-        print(f"ERROR: Bot crashed: {e}")
-        # The following is a synchronous alert, which is fine here as the loop is closed.
-        from src.core.database import send_critical_alert
-        send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
+    if USE_DISCORD:
+        try:
+            bot.run(TOKEN)
+        except Exception as e:
+            print(f"ERROR: Bot crashed: {e}")
+            # The following is a synchronous alert, which is fine here as the loop is closed.
+            from src.core.database import send_critical_alert
+            send_critical_alert("Bot Crash", "News Bot stopped unexpectedly", str(e))
+    else:
+        # Run without Discord
+        import asyncio
+        async def run_without_discord():
+            await initialize_database()
+            api_rate_limiter.start()
+            print("News fetching started without Discord...")
+            while True:
+                try:
+                    # Run the RSS and API checks manually
+                    loop = asyncio.get_running_loop()
+                    # RSS Feeds
+                    for feed_url in RSS_FEEDS:
+                        try:
+                            feed = await loop.run_in_executor(None, feedparser.parse, feed_url)
+                            source_title = feed.feed.get('title', 'RSS')
+                            for entry in feed.entries[:5]:
+                                news_id = entry.get('id', entry.get('link', ''))
+                                if news_id in processed_news:
+                                    continue
+                                processed_news.add(news_id)
+                                title = entry.get('title', '')
+                                description = entry.get('summary', entry.get('description', ''))
+                                full_text = f"{title} {description}"
+                                from src.handlers.discord_bot import extract_symbols
+                                symbols = extract_symbols(full_text)
+                                if symbols:
+                                    sentiment, score = analyze_sentiment(full_text)
+                                    for symbol in symbols:
+                                        saved = await async_save_news(symbol, sentiment, score, title, source_title, 0)
+                                        if saved:
+                                            print(f"News: RSS News: {symbol} | {sentiment} ({score:.2f})")
+                        except Exception as e:
+                            print(f"ERROR: RSS Feed error ({feed_url}): {e}")
+                        await asyncio.sleep(5)
+
+                    # Free APIs
+                    print("Checking Free APIs...")
+                    for symbol in SYMBOLS:
+                        try:
+                            cp_news = await api_rate_limiter.call(get_cryptopanic_news, symbol)
+                            for news_item in cp_news:
+                                sentiment, score = analyze_sentiment(news_item['title'])
+                                saved = await async_save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                                if saved:
+                                    print(f"News: CryptoPanic: {symbol} | {sentiment}")
+                            await asyncio.sleep(1.5)
+
+                            reddit_news = await api_rate_limiter.call(get_reddit_news, symbol)
+                            for news_item in reddit_news:
+                                sentiment, score = analyze_sentiment(news_item['title'])
+                                saved = await async_save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                                if saved:
+                                    print(f"News: Reddit: {symbol} | {sentiment}")
+                            await asyncio.sleep(1.5)
+
+                            cg_news = await api_rate_limiter.call(get_coingecko_news, symbol)
+                            for news_item in cg_news:
+                                sentiment, score = analyze_sentiment(news_item['title'])
+                                saved = await async_save_news(symbol, sentiment, score, news_item['title'], news_item['source'], 0)
+                                if saved:
+                                    print(f"News: CoinGecko: {symbol} | {sentiment}")
+                            await asyncio.sleep(1.5)
+                        except Exception as e:
+                            print(f"Warning: Free API error for {symbol}: {e}")
+
+                    if len(processed_news) > 1000:
+                        processed_news.clear()
+                    print("OK: RSS + Free APIs check completed")
+                    await asyncio.sleep(30 * 60)  # Wait 30 minutes
+                except Exception as e:
+                    print(f"Error in news loop: {e}")
+                    await asyncio.sleep(60)
+
+        asyncio.run(run_without_discord())
